@@ -31,25 +31,25 @@ html,body{height:100%;background:#0a0604;overflow:hidden;font-family:Lora,Georgi
 .spreadbox{position:absolute;inset:0;perspective:1600px}
 .pg{position:absolute;width:var(--pw);height:var(--ph)}
 .paper{position:absolute;inset:0;background-repeat:no-repeat}
-.text{position:absolute;width:var(--tw);left:var(--tl)}
-.pg.L .text{top:var(--ttL)}.pg.R .text{top:var(--ttR)}
+.text{position:absolute;width:var(--tw);top:var(--tt)}
+.pg.L .text{left:var(--tlL)}.pg.R .text{left:var(--tlR)}
 .line{height:20px;font:15px/20px Lora,Georgia,serif;white-space:pre;color:#3a2412;border-radius:3px}
 .line.on{color:#1d0f05;background:linear-gradient(90deg,rgba(255,196,90,0),rgba(255,196,90,.42) 6%,rgba(255,196,90,.42) 94%,rgba(255,196,90,0))}
 .pn{position:absolute;left:0;right:0;text-align:center;font:italic 12px Lora,Georgia,serif;color:#6b4a22;opacity:.75}
-.pg.L .pn{top:12px}.pg.R .pn{bottom:12px}
-.leaf{position:absolute;transform-origin:50% 0;transform-style:preserve-3d;z-index:5;width:var(--pw);height:var(--ph)}
+.pg .pn{bottom:8px}
+.leaf{position:absolute;transform-origin:0 50%;transform-style:preserve-3d;z-index:5;width:var(--pw);height:var(--ph)}
 .leaf>.pg{left:0;top:0;backface-visibility:hidden;-webkit-backface-visibility:hidden}
-.leaf>.back{transform:rotateX(180deg)}
+.leaf>.back{transform:rotateY(180deg)}
 
-#candle{position:absolute;left:-14px;top:152px;width:96px;height:92px;z-index:8}
+#candle{position:absolute;left:-14px;top:150px;width:96px;height:92px;z-index:8}
 #candleimg{position:absolute;left:0;top:0;width:96px;height:92px;display:block}
 #glow{position:absolute;left:-166px;top:-179px;width:420px;height:420px;pointer-events:none;
   background:radial-gradient(circle,rgba(255,170,70,.55),rgba(255,140,40,.18) 40%,transparent 65%);
   opacity:calc(.55 + .45*var(--f));transition:opacity .1s linear}
 #flame{position:absolute;left:33px;top:-7px;width:22px;height:38px;transform-origin:50% 100%;
   transform:scale(calc(.9 + .14*var(--f))) skewX(var(--sk));transition:transform .1s linear}
-#ink{position:absolute;left:462px;top:160px;width:80px;height:82px;z-index:8;filter:drop-shadow(0 4px 5px rgba(0,0,0,.5))}
-#quill{position:absolute;left:439px;top:91px;width:64px;height:110px;z-index:9;transform:scaleX(-1);filter:drop-shadow(0 5px 5px rgba(0,0,0,.45))}
+#ink{position:absolute;left:462px;top:150px;width:80px;height:82px;z-index:8;filter:drop-shadow(0 4px 5px rgba(0,0,0,.5))}
+#quill{position:absolute;left:439px;top:81px;width:64px;height:110px;z-index:9;transform:scaleX(-1);filter:drop-shadow(0 5px 5px rgba(0,0,0,.45))}
 
 #light{position:absolute;inset:0;z-index:20;pointer-events:none;mix-blend-mode:screen;
   background:radial-gradient(circle at 6% 19%,rgba(255,170,80,.3),transparent 50%);
@@ -77,7 +77,7 @@ body.clean #ctl{display:none}
   <div class="plaque" id="giftsPlaque" style="left:356px;width:170px"><div class="list" id="gifts"></div></div>
 
   <div id="bookwrap">
-    <img class="bookimg" src="assets/book-v.webp" alt="">
+    <img class="bookimg" src="assets/book.webp" alt="">
     <div id="spread" class="spreadbox">
       <div class="pg L" id="pL"></div>
       <div class="pg R" id="pR"></div>
@@ -115,13 +115,13 @@ body.clean #ctl{display:none}
 
 <script>
 (function(){
-/* Геометрия книги (вертикальная: страница L сверху, страница R снизу, корешок горизонтальный) */
-var BX=44, BY=84, BW=452, BH=740, BOOK='assets/book-v.webp';
-var PW=348, PH=294, X0=77, Y0T=74, Y0B=368;
-var TW=296, TLO=26, TTT=29, TTB=39, LH=20, PERP=11;
+/* Геометрия книги: горизонтальный разворот, крупный план (края книги уходят за экран) */
+var BX=-75, BY=250, BW=690, BH=422, BOOK='assets/book.webp';
+var PW=275, PH=325, X0L=69, X0R=344, Y0=25;
+var TW=198, TLL=37, TLR=40, TT=19, LH=20, PERP=14;
 var READ=0.13;                       /* секунд на знак: чем больше, тем медленнее лупа */
 var Z=2, RCL=56, HCX=73, HCY=70;     /* лупа */
-var TXL=X0+TLO, TOPY=Y0T+TTT;
+var TXL=X0L+TLL, TOPY=Y0+TT;
 
 var q=new URLSearchParams(location.search);
 if(q.get('clean')==='1') document.body.classList.add('clean');
@@ -131,10 +131,10 @@ var stage=document.getElementById('stage'), pL=document.getElementById('pL'), pR
     chat=document.getElementById('chat'), gifts=document.getElementById('gifts'), giftsPlaque=document.getElementById('giftsPlaque');
 
 var rs=stage.style;
-rs.setProperty('--pw',PW+'px'); rs.setProperty('--ph',PH+'px'); rs.setProperty('--tw',TW+'px'); rs.setProperty('--tl',TLO+'px');
-rs.setProperty('--ttL',TTT+'px'); rs.setProperty('--ttR',TTB+'px');
+rs.setProperty('--pw',PW+'px'); rs.setProperty('--ph',PH+'px'); rs.setProperty('--tw',TW+'px');
+rs.setProperty('--tlL',TLL+'px'); rs.setProperty('--tlR',TLR+'px'); rs.setProperty('--tt',TT+'px');
 bookwrap.style.cssText+='left:'+BX+'px;top:'+BY+'px;width:'+BW+'px;height:'+BH+'px';
-pL.style.left=X0+'px'; pL.style.top=Y0T+'px'; pR.style.left=X0+'px'; pR.style.top=Y0B+'px';
+pL.style.left=X0L+'px'; pL.style.top=Y0+'px'; pR.style.left=X0R+'px'; pR.style.top=Y0+'px';
 
 function fit(){stage.style.transform='scale('+Math.min(innerWidth/540,innerHeight/960)+')'}
 addEventListener('resize',fit); fit();
@@ -184,8 +184,8 @@ function torn(spine){
 function pageHTML(pg,side,num,paper){
   var h='';
   if(paper){
-    var oy=side==='L'?Y0T:Y0B;
-    h+='<div class="paper" style="clip-path:'+torn(side==='L'?'bottom':'top')+';background-image:url('+BOOK+');background-size:'+BW+'px '+BH+'px;background-position:-'+X0+'px -'+oy+'px"></div>';
+    var ox=side==='L'?X0L:X0R;
+    h+='<div class="paper" style="clip-path:'+torn(side==='L'?'right':'left')+';background-image:url('+BOOK+');background-size:'+BW+'px '+BH+'px;background-position:-'+ox+'px -'+Y0+'px"></div>';
   }
   h+='<div class="text">';
   if(pg) pg.lines.forEach(function(l){h+='<div class="line">'+esc(l.text)+'</div>'});
@@ -227,20 +227,20 @@ function buildSeq(){
 }
 function spreadsCount(){return Math.max(1,Math.ceil(S.pages.length/2))}
 
-/* лист нижней страницы поднимается вверх через корешок и ложится на верхнюю */
+/* правый лист переворачивается через корешок и ложится на левую страницу */
 function flipTo(idx){
   if(S.flipping) return;
   S.flipping=true; lens.style.opacity=0; S.act=null; markActive();
   var cur=S.spread;
   var nLtext=pageHTML(S.pages[2*idx],'L',2*idx+1,false), nRtext=pageHTML(S.pages[2*idx+1],'R',2*idx+2,false);
   var leaf=document.createElement('div'); leaf.className='leaf';
-  leaf.style.left=X0+'px'; leaf.style.top=Y0B+'px';
+  leaf.style.left=X0R+'px'; leaf.style.top=Y0+'px';
   var fr=document.createElement('div'); fr.className='pg R front'; fr.innerHTML=pageHTML(S.pages[2*cur+1],'R',2*cur+2,true);
   var bk=document.createElement('div'); bk.className='pg L back'; bk.innerHTML=pageHTML(S.pages[2*idx],'L',2*idx+1,true);
   leaf.appendChild(fr); leaf.appendChild(bk); spread.appendChild(leaf);
   pR.innerHTML=nRtext;
   var dur=1250+Math.random()*400;
-  var a=leaf.animate([{transform:'rotateX(0deg)'},{transform:'rotateX(180deg)'}],{duration:dur,easing:'ease-in-out',fill:'forwards'});
+  var a=leaf.animate([{transform:'rotateY(0deg)'},{transform:'rotateY(-180deg)'}],{duration:dur,easing:'ease-in-out',fill:'forwards'});
   a.onfinish=function(){
     pL.innerHTML=nLtext; leaf.remove(); S.spread=idx; buildSeq(); refreshLens();
     S.flipping=false; lens.style.opacity=1;
@@ -262,7 +262,7 @@ function tick(now){
       var ln=S.seq[S.cur];
       if(S.actCur!==S.cur){S.actCur=S.cur; S.act={side:ln.side,i:ln.i}; markActive()}
       S.el+=dt; var t=Math.min(1,S.el/ln.dur);
-      S.tx=TXL+t*ln.w; S.ty=(ln.side==='L'?Y0T+TTT:Y0B+TTB)+LH*ln.i+LH/2;
+      S.tx=(ln.side==='L'?X0L+TLL:X0R+TLR)+t*ln.w; S.ty=TOPY+LH*ln.i+LH/2;
       if(S.el>=ln.dur){S.cur++; S.el=0; if(S.cur>=S.seq.length) S.hold=1.2}
     } else S.hold=1.2;
   }
