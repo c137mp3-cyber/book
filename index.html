@@ -14,6 +14,7 @@ html,body{height:100%;background:#0a0604;overflow:hidden;font-family:Lora,Georgi
 #stage{position:relative;width:540px;height:960px;flex:none;overflow:hidden;--f:1;--sk:0deg;background:#3b2414}
 
 #table{position:absolute;inset:0;background:#3b2414 url(assets/table.webp) center/cover no-repeat}
+#lip{position:absolute;left:0;right:0;bottom:0;height:26px;z-index:4;background:linear-gradient(180deg,#d9a35c 0 2px,#8a5524 2px 5px,#4a2a12 5px 14px,#24130a 14px);box-shadow:0 -6px 10px rgba(0,0,0,.45)}
 .prop{position:absolute;z-index:3;display:block;filter:drop-shadow(0 5px 5px rgba(0,0,0,.55))}
 
 /* таблички: одна картинка рамки, внутри чистый пергамент */
@@ -42,24 +43,26 @@ html,body{height:100%;background:#0a0604;overflow:hidden;font-family:Lora,Georgi
 .pg .pn{bottom:8px}
 
 /* лист из полос: каждая полоса вращается относительно предыдущей, поэтому бумага гнётся */
-.leaf{position:absolute;transform-style:preserve-3d;z-index:5;width:var(--pw);height:var(--ph)}
+.leaf{position:absolute;transform-style:preserve-3d;z-index:5}
+.pgimg{position:absolute;top:0;display:block;max-width:none}
+.cast{position:absolute;pointer-events:none;opacity:0}
 .strip{position:absolute;top:0;height:100%;transform-origin:0 50%;transform-style:preserve-3d}
 .face{position:absolute;left:0;top:0;width:100%;height:100%;overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden}
 .face.b{transform:rotateY(180deg)}
 .sh{position:absolute;inset:0;background:#2a1406;opacity:0;pointer-events:none}
 
-#candle{position:absolute;left:-14px;top:150px;width:96px;height:92px;z-index:8}
+#candle{position:absolute;left:-14px;top:408px;width:96px;height:92px;z-index:8}
 #candleimg{position:absolute;left:0;top:0;width:96px;height:92px;display:block}
 #glow{position:absolute;left:-166px;top:-179px;width:420px;height:420px;pointer-events:none;
   background:radial-gradient(circle,rgba(255,170,70,.55),rgba(255,140,40,.18) 40%,transparent 65%);
   opacity:calc(.55 + .45*var(--f));transition:opacity .1s linear}
 #flame{position:absolute;left:33px;top:-7px;width:22px;height:38px;transform-origin:50% 100%;
   transform:scale(calc(.9 + .14*var(--f))) skewX(var(--sk));transition:transform .1s linear}
-#ink{position:absolute;left:462px;top:150px;width:80px;height:82px;z-index:8;filter:drop-shadow(0 4px 5px rgba(0,0,0,.5))}
-#quill{position:absolute;left:439px;top:81px;width:64px;height:110px;z-index:9;transform:scaleX(-1);filter:drop-shadow(0 5px 5px rgba(0,0,0,.45))}
+#ink{position:absolute;left:462px;top:408px;width:80px;height:82px;z-index:8;filter:drop-shadow(0 4px 5px rgba(0,0,0,.5))}
+#quill{position:absolute;left:439px;top:339px;width:64px;height:110px;z-index:9;transform:scaleX(-1);filter:drop-shadow(0 5px 5px rgba(0,0,0,.45))}
 
 #light{position:absolute;inset:0;z-index:20;pointer-events:none;mix-blend-mode:screen;
-  background:radial-gradient(circle at 6% 19%,rgba(255,170,80,.3),transparent 50%);
+  background:radial-gradient(circle at 6% 47%,rgba(255,170,80,.3),transparent 50%);
   opacity:calc(.6 + .4*var(--f));transition:opacity .1s linear}
 #vig{position:absolute;inset:0;z-index:25;pointer-events:none;background:radial-gradient(ellipse at 50% 55%,transparent 55%,rgba(0,0,0,.5) 100%)}
 
@@ -89,11 +92,12 @@ body.clean #ctl{display:none}
 <div id="wrap">
 <div id="stage">
   <div id="table"></div>
+  <div id="lip"></div>
 
-  <img class="prop" src="assets/scroll1.webp" alt="" style="left:-34px;top:716px;width:210px;transform:rotate(7deg)">
-  <img class="prop" src="assets/bottle_red.webp" alt="" style="left:172px;top:776px;width:58px;transform:rotate(-8deg)">
-  <img class="prop" src="assets/scroll2.webp" alt="" style="left:352px;top:828px;width:200px;transform:rotate(-5deg)">
-  <img class="prop" src="assets/bottle_blue.webp" alt="" style="left:96px;top:196px;width:42px;transform:rotate(6deg)">
+  <img class="prop" src="assets/scroll1.webp" alt="" style="left:-40px;top:118px;width:210px;transform:rotate(8deg)">
+  <img class="prop" src="assets/bottle_red.webp" alt="" style="left:196px;top:262px;width:58px;transform:rotate(-12deg)">
+  <img class="prop" src="assets/scroll2.webp" alt="" style="left:340px;top:236px;width:200px;transform:rotate(-6deg)">
+  <img class="prop" src="assets/bottle_blue.webp" alt="" style="left:100px;top:404px;width:42px;transform:rotate(6deg)">
 
   <div class="plaque" id="chatPlaque" style="left:10px;width:272px;height:68px"><div class="list" id="chat"></div></div>
   <div class="plaque" id="giftsPlaque" style="left:344px;width:188px;height:68px"><div class="list" id="gifts"></div></div>
@@ -145,18 +149,20 @@ body.clean #ctl{display:none}
 <script>
 (function(){
 /* Геометрия книги: горизонтальный разворот. Левая страница заканчивается там, где начинается правая (корешок) */
-var BX=-45, BY=258, BW=640, BH=401, BOOK='assets/book.webp';
-var PW=270, PH=325, X0L=52, X0R=322, Y0=38;
+var BX=-45, BY=516, BW=640, BH=401, BOOK='assets/book.webp';
+var PW=270, PH=325, X0L=50, X0R=320, Y0=38;
+var K=640/1100, LX0=548*K, LY0=5*K, LW=537*K, LHT=671*K;   /* лист: реальная форма страницы из картинки книги */
 var TW=226, TLL=22, TLR=22, TT=22, LH=20, PERP=14;
 var READ=0.13;                       /* секунд на знак: чем больше, тем медленнее лупа */
 var Z=2, RCL=56, HCX=73, HCY=70;     /* лупа */
-var ARMX=620, ARMY=1180;             /* где «локоть» руки с лупой за краем экрана */
-var STK_Y=383, STK_MIN=3, STK_MAX=15;/* толщина блока страниц под книгой */
-var NS=12;                           /* число полос в листе */
+var ARMX=640, ARMY=1130;             /* где «локоть» руки с лупой за краем экрана */
+var STK_Y=388, STK_MIN=3, STK_MAX=15;/* толщина блока страниц под книгой */
+var NS=16;                           /* число полос в листе */
 var TXL=X0L+TLL, TOPY=Y0+TT;
 
 var q=new URLSearchParams(location.search);
 if(q.get('clean')==='1') document.body.classList.add('clean');
+if(q.get('lens')==='0') document.getElementById('lens').style.display='none';
 var stage=document.getElementById('stage'), pL=document.getElementById('pL'), pR=document.getElementById('pR'),
     bookwrap=document.getElementById('bookwrap'), spread=document.getElementById('spread'),
     lens=document.getElementById('lens'), glass=document.getElementById('glass'), arm=document.getElementById('arm'),
@@ -337,13 +343,16 @@ function mkParams(force){
 }
 function buildLeaf(frontHTML,backHTML){
   var leaf=document.createElement('div'); leaf.className='leaf';
-  leaf.style.left=X0R+'px'; leaf.style.top=Y0+'px';
-  var sw=PW/NS, parent=leaf, strips=[];
+  leaf.style.cssText='left:'+LX0+'px;top:'+LY0+'px;width:'+LW+'px;height:'+LHT+'px';
+  var sw=LW/NS, parent=leaf, strips=[];
   for(var i=0;i<NS;i++){
     var s=document.createElement('div'); s.className='strip';
-    s.style.left=(i?sw:0)+'px'; s.style.width=(sw+(i<NS-1?.8:0))+'px';
-    s.innerHTML='<div class="face f"><div class="pg R" style="left:'+(-i*sw)+'px;top:0">'+frontHTML+'</div><i class="sh"></i></div>'+
-                '<div class="face b"><div class="pg L" style="left:'+(-(PW-(i+1)*sw))+'px;top:0">'+backHTML+'</div><i class="sh"></i></div>';
+    s.style.left=(i?sw:0)+'px'; s.style.width=(sw+(i<NS-1?2:0))+'px';
+    s.innerHTML=
+      '<div class="face f"><img class="pgimg" src="assets/pageR.webp" style="left:'+(-i*sw)+'px;width:'+LW+'px;height:'+LHT+'px" alt="">'+
+        '<div class="pg R" style="left:'+(X0R-LX0-i*sw)+'px;top:'+(Y0-LY0)+'px">'+frontHTML+'</div><i class="sh"></i></div>'+
+      '<div class="face b"><img class="pgimg" src="assets/pageL.webp" style="left:'+(-(LW-(i+1)*sw))+'px;width:'+LW+'px;height:'+LHT+'px" alt="">'+
+        '<div class="pg L" style="left:'+(X0L-LX0+(i+1)*sw)+'px;top:'+(Y0-LY0)+'px">'+backHTML+'</div><i class="sh"></i></div>';
     parent.appendChild(s); parent=s;
     strips.push({el:s,fs:s.querySelector('.f .sh'),bs:s.querySelector('.b .sh')});
   }
@@ -365,18 +374,19 @@ function applyAngles(L,phis){
     var d=phis[i]-prev; prev=phis[i];
     var st=L.strips[i];
     st.el.style.transform='rotateY('+(-d).toFixed(2)+'deg)';
-    var sn=Math.sin(phis[i]*Math.PI/180), sh=(.34*Math.abs(sn)).toFixed(3);
-    st.fs.style.opacity=sh; st.bs.style.opacity=sh;
+    var c=Math.cos(phis[i]*Math.PI/180);
+    st.fs.style.opacity=(.5*(1-c)).toFixed(3);            /* лицевая сторона темнеет, когда лист встаёт ребром */
+    st.bs.style.opacity=(.5*(1+c)).toFixed(3);
   }
 }
 /* где на экране точка листа (доля ширины sa, высоты va) с учётом перспективы */
 function track(phis,sa,va){
-  var sw=PW/NS, x=0, z=0, n=sa*NS;
+  var sw=LW/NS, x=0, z=0, n=sa*NS;
   for(var i=0;i<NS;i++){
     var f=Math.min(1,Math.max(0,n-i)), r=phis[i]*Math.PI/180;
     x+=sw*f*Math.cos(r); z+=sw*f*Math.sin(r);
   }
-  var X=X0R+x, Y=Y0+va*PH, ox=BW/2, oy=BH/2, k=1600/(1600-z);
+  var X=LX0+x, Y=LY0+va*LHT, ox=BW/2, oy=BH/2, k=1600/(1600-z);
   return {x:BX+ox+(X-ox)*k, y:BY+oy+(Y-oy)*k};
 }
 function lerp(a,b,t){return a+(b-a)*t}
@@ -395,13 +405,18 @@ function flipTo(idx,force){
   S.flipping=true; lens.style.opacity=0; S.act=null; markActive();
   var cur=S.spread, P=mkParams(force), H=HANDS[P.pose], ez=EASE[P.ease];
   var nLtext=pageHTML(S.pages[2*idx],'L',2*idx+1,false), nRtext=pageHTML(S.pages[2*idx+1],'R',2*idx+2,false);
-  var L=buildLeaf(pageHTML(S.pages[2*cur+1],'R',2*cur+2,true),pageHTML(S.pages[2*idx],'L',2*idx+1,true));
+  var L=buildLeaf(pageHTML(S.pages[2*cur+1],'R',2*cur+2,false),pageHTML(S.pages[2*idx],'L',2*idx+1,false));
   spread.appendChild(L.el);
   applyAngles(L,angles(P,0));
   pR.innerHTML=nRtext;
   setStack(idx,true);
   var TIN=700, D=P.dur, TOUT=650, t0=performance.now(), landed=false;
   var p0=track(angles(P,0),H.s,H.v), p1=track(angles(P,1),H.s,H.v);
+  var cR=document.createElement('div'), cL=document.createElement('div');
+  cR.className=cL.className='cast';
+  cR.style.cssText='left:'+LX0+'px;top:'+LY0+'px;width:'+LW+'px;height:'+LHT+'px;background:radial-gradient(ellipse at 0% 55%,rgba(25,12,3,.7),transparent 62%)';
+  cL.style.cssText='left:'+(LX0-LW)+'px;top:'+LY0+'px;width:'+LW+'px;height:'+LHT+'px;background:radial-gradient(ellipse at 100% 55%,rgba(25,12,3,.7),transparent 62%)';
+  spread.insertBefore(cL,L.el); spread.insertBefore(cR,cL);
   H.el.style.display='block';
   (function frame(now){
     var t=now-t0, pt;
@@ -409,9 +424,12 @@ function flipTo(idx,force){
       var u=EASE.snap(t/TIN); pt=away(p0,520); pt={x:lerp(pt.x,p0.x,u),y:lerp(pt.y,p0.y,u)};
     } else if(t<TIN+D){
       var e=ez((t-TIN)/D), phis=angles(P,e); applyAngles(L,phis); pt=track(phis,H.s,H.v);
+      var ev=Math.min(1,Math.max(0,e)), sn=Math.sin(Math.PI*ev);
+      cR.style.opacity=(ev<.5?sn:Math.max(0,1-(ev-.5)*2.4)*sn).toFixed(3);
+      cL.style.opacity=(ev>.5?sn:Math.max(0,1-(.5-ev)*2.4)*sn).toFixed(3);
     } else {
       if(!landed){
-        landed=true; applyAngles(L,angles(P,1)); pL.innerHTML=nLtext; L.el.remove(); S.spread=idx; buildSeq(); refreshLens();
+        landed=true; applyAngles(L,angles(P,1)); pL.innerHTML=nLtext; L.el.remove(); cR.remove(); cL.remove(); S.spread=idx; buildSeq(); refreshLens();
       }
       var u2=Math.min(1,(t-TIN-D)/TOUT); u2=u2*u2; var f=away(p1,520); pt={x:lerp(p1.x,f.x,u2),y:lerp(p1.y,f.y,u2)};
     }
@@ -440,8 +458,10 @@ function tick(now){
       if(S.el>=ln.dur){S.cur++; S.el=0; if(S.cur>=S.seq.length) S.hold=1.2}
     } else S.hold=1.2;
   }
-  var k=1-Math.exp(-dt*3.5);
-  S.lx+=(S.tx-S.lx)*k; S.ly+=(S.ty-S.ly)*k;
+  /* на паузе лупа с рукой уходит вниз за край, при play возвращается */
+  var gx=S.tx, gy=S.playing?S.ty:BH+300;
+  var k=1-Math.exp(-dt*(S.playing?3.5:2.2));
+  S.lx+=(gx-S.lx)*k; S.ly+=(gy-S.ly)*k;
   var dx=S.lx+Math.sin(now/900)*.8, dy=S.ly+Math.cos(now/700)*.8;
   lens.style.transform='translate('+(BX+dx-HCX)+'px,'+(BY+dy-HCY)+'px)';
   var cx=BX+dx, cy=BY+dy;
