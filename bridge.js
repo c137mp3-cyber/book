@@ -41,10 +41,10 @@ function go() {
   C.on('chat', d => { const text = d.comment || ''; if (!text) return; console.log('чат', who(d) + ':', text); send({ type: 'chat', user: who(d), text }); });
   C.on('gift', d => {
     const g = d.giftDetails || {}, t = d.giftType ?? g.giftType;
-    if (t === 1 && !d.repeatEnd) return;            // серия подарков: берём итог один раз
     const name = g.giftName || d.giftName || 'Подарок', count = d.repeatCount || 1;
-    console.log('подарок', who(d), name, '×' + count);
-    send({ type: 'gift', user: who(d), name, count });
+    const streak = t === 1 && !d.repeatEnd;           // серия подарков ещё идёт: строка на доске обновляется (×2, ×3 …)
+    console.log('подарок', who(d), name, '×' + count, streak ? '(серия идёт)' : '');
+    send({ type: 'gift', user: who(d), name, count, streak, final: t === 1 && !!d.repeatEnd });
   });
   C.on('disconnected', () => { console.log('эфир отключился, пробую снова…'); setTimeout(go, 5000); });
   C.connect().then(() => console.log('эфир подключён: @' + NICK)).catch(e => { console.log('не удалось подключиться:', e.message || e, '— повтор через 10 с'); setTimeout(go, 10000); });

@@ -1706,13 +1706,15 @@ function Plaque(id,max,fs,rot,wrap){
     if(tot<=w) return [{s:1,a:nm,b:tx}];
     if(tot*MINS<=w && (!wrap || tot*.85<=w)){ var sc=Math.min(1,w/tot); return [{s:sc,a:nm,b:tx}] }
     if(!wrap){ var sc0=MINS; return [{s:sc0,a:nm,b:fit(tx,w-mw(nm,fB(sc0)),fN(sc0))}] }
-    var sc1=.86, words=tx.split(' '), l1='', i=0, room=w-mw(nm,fB(sc1));
-    while(i<words.length && mw((l1?l1+' ':'')+words[i],fN(sc1))<=room){ l1+=(l1?' ':'')+words[i]; i++ }
-    if(!l1){ l1=fit(words[0]||'',room,fN(sc1)); i=1 }
-    var rest=words.slice(i).join(' ');
-    if(!rest) return [{s:sc1,a:nm,b:l1}];
-    var t2=mw(rest,fN(sc1)), sc2=t2<=w?sc1:Math.max(MINS,w/t2);
-    return [{s:sc1,a:nm,b:l1},{s:sc2,a:'',b:fit(rest,w,fN(sc2))}];
+    var sc1=.86, words=tx.split(' '), out=[], i=0, room=w-mw(nm,fB(sc1)), ln, first=true;
+    while(i<words.length && out.length<3){
+      ln=''; var rm=first?room:w;
+      while(i<words.length && mw((ln?ln+' ':'')+words[i],fN(sc1))<=rm){ ln+=(ln?' ':'')+words[i]; i++ }
+      if(!ln){ ln=fit(words[i],rm,fN(sc1)); i++ }
+      out.push({s:sc1,a:first?nm:'',b:ln}); first=false;
+    }
+    if(i<words.length){ var last=out[out.length-1]; last.b=fit(last.b+' '+words.slice(i).join(' '),first?room:w-(last.a?mw(last.a,fB(sc1)):0),fN(sc1)) }
+    return out;
   }
   function flat(now){
     f.setTransform(R,0,0,R,0,0); f.clearRect(0,0,W,H); f.textBaseline='middle';
@@ -1746,15 +1748,20 @@ function Plaque(id,max,fs,rot,wrap){
   }
   function render(now){ var busy=flat(now); warp(); if(busy) requestAnimationFrame(render); else anim=false }
   document.fonts.ready.then(function(){if(!anim){anim=true; requestAnimationFrame(render)}});
-  return {add:function(name,sep,text){
-    items.push({name:String(name),sep:sep,text:String(text),t0:performance.now()}); while(items.length>8) items.shift();
+  return {add:function(name,sep,text,key){
+    var ex=key&&items.filter(function(it){return it.key===key})[0];
+    if(ex){ ex.text=String(text) }     /* серия подарков: обновляем ту же строку (×2 → ×3 …), а не добавляем новую */
+    else { items.push({name:String(name),sep:sep,text:String(text),t0:performance.now(),key:key}); while(items.length>8) items.shift() }
     if(!anim){anim=true; requestAnimationFrame(render)}
   }};
 }
-var PCHAT=Plaque('chatPlaque',4,13.5,.9,true), PGIFT=Plaque('giftsPlaque',3,13.5,0,true);
-function addChat(name,text){ PCHAT.add(String(name).slice(0,24),': ',String(text).slice(0,90)) }
-function addGift(name,gift){
-  PGIFT.add(String(name).slice(0,24),' · ',String(gift).slice(0,40));
+var PCHAT=Plaque('chatPlaque',5,12.5,.9,true), PGIFT=Plaque('giftsPlaque',3,13.5,0,true);
+function addChat(name,text){ PCHAT.add(String(name).slice(0,30),': ',String(text).slice(0,200)) }
+var GRU={'rose':'Роза','tiktok':'TikTok','gg':'GG','finger heart':'Сердечко пальцами','heart me':'Сердце','doughnut':'Пончик','hand hearts':'Сердца руками','perfume':'Духи','lion':'Лев','galaxy':'Галактика','universe':'Вселенная','corgi':'Корги','swan':'Лебедь','money gun':'Денежный пистолет','mini speaker':'Мини-колонка','hat and mustache':'Шляпа и усы','confetti':'Конфетти','panda':'Панда','love you':'Люблю тебя','ice cream cone':'Мороженое','friendship necklace':'Ожерелье дружбы','sunglasses':'Очки','paper crane':'Журавлик','thumbs up':'Класс','heart':'Сердце'};
+function addGift(name,gift,key){
+  var g=String(gift), m=/^(.*?)(\s*×\d+)?$/.exec(g), base=m[1].trim(), cnt=m[2]||'';
+  base=GRU[base.toLowerCase()]||base;
+  PGIFT.add(String(name).slice(0,30),': ',(base+cnt).slice(0,60),key);
   var gl2=document.getElementById('giftLight'); gl2.classList.remove('flash'); void gl2.offsetWidth; gl2.classList.add('flash');
 }
 
@@ -1855,7 +1862,7 @@ if(q.get('demo')==='1'){   /* вымышленный чат и подарки �
     wsk.onopen=function(){tries=0};
     wsk.onmessage=function(ev){ var m; try{m=JSON.parse(ev.data)}catch(e){return}
       if(m.type==='chat'&&m.text) addChat(m.user||'Зритель',m.text);
-      else if(m.type==='gift') addGift(m.user||'Зритель',(m.name||'Подарок')+((m.count||1)>1?' ×'+m.count:'')) };
+      else if(m.type==='gift') addGift(m.user||'Зритель',(m.name||'Подарок')+((m.count||1)>1?' ×'+m.count:''),m.streak||m.final?(m.user+'|'+m.name):null) };
     wsk.onclose=function(){ setTimeout(conn,Math.min(10000,1000+tries++*1500)) };
     wsk.onerror=function(){ try{wsk.close()}catch(e){} };
   }
