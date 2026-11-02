@@ -10,7 +10,8 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:#0a0604;overflow:hidden;font-family:Lora,Georgia,serif}
-#wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+#bgfill{position:fixed;inset:-6%;background:#0a0604 center/cover no-repeat;filter:blur(22px) brightness(.7) saturate(1.1);z-index:0}
+#wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:1}
 #stage{position:relative;width:540px;height:960px;flex:none;overflow:hidden;--f:1;background:#120a06}
 #scene{position:absolute;left:0;top:0;width:540px;display:block}
 
@@ -87,6 +88,7 @@ body.clean #ctl{display:none}
 </style>
 </head>
 <body>
+<div id="bgfill"></div>
 <div id="wrap">
 <div id="stage">
   <img id="scene" src="assets/scene2.webp" alt="">
@@ -194,6 +196,7 @@ pL.style.left=(LX0-LW)+'px'; pL.style.top=LY0+'px'; pR.style.left=LX0+'px'; pR.s
 (function(){var c=document.createElement('canvas'); c.width=c.height=90; var g=c.getContext('2d'), d=g.createImageData(90,90);
   for(var i=0;i<8100;i++){d.data[i*4+3]=Math.random()<.24?255-Math.random()*190:255} g.putImageData(d,0,0);
   stage.style.setProperty('--grain','url('+c.toDataURL()+')')})();
+document.getElementById('bgfill').style.backgroundImage='url(assets/scene2.webp)';
 function fit(){stage.style.transform='scale('+Math.min(innerWidth/540,innerHeight/960)+')'}
 addEventListener('resize',fit); fit();
 
@@ -1686,7 +1689,7 @@ function Plaque(id,max,fs,rot,wrap){
   /* строки записи: всё в одну строку (при нужде мельче), длинное — переносится на вторую */
   function layout(it){
     var w=W-2*PAD, nm=it.name, nW=mw(nm,fB(1)), tx=it.sep+it.text, tW=mw(tx,fN(1)), tot=nW+tW;
-    if(nW>w*.6){nm=fit(nm,w*.6,fB(1)); nW=mw(nm,fB(1)); tot=nW+tW}
+    if(nW>w*.7){nm=fit(nm,w*.7,fB(1)); nW=mw(nm,fB(1)); tot=nW+tW}
     if(tot<=w) return [{s:1,a:nm,b:tx}];
     if(tot*MINS<=w && (!wrap || tot*.85<=w)){ var sc=Math.min(1,w/tot); return [{s:sc,a:nm,b:tx}] }
     if(!wrap){ var sc0=MINS; return [{s:sc0,a:nm,b:fit(tx,w-mw(nm,fB(sc0)),fN(sc0))}] }
@@ -1819,7 +1822,7 @@ document.getElementById('bPrev').onclick=function(){
 var gi=0, GN=['Роза','Сердце','Корона','Лев'], PN=['Алёна','Мрак_77','Ксюша','Витя'];
 document.getElementById('bGift').onclick=function(){addGift(PN[gi%4],GN[gi%4]+' ×'+(1+gi%5)); gi++};
 
-if(q.get('demo')!=='0'){
+if(q.get('demo')==='1'){   /* вымышленный чат и подарки — только по ?demo=1; в эфире показываются только настоящие */
   var NM=['Алёна','Мрак_77','Тёмный_Лес','Ксюша','Витя','Ночной_Гость'],
       TX=['Привет всем!','Страшно уже','Свет не выключай','Читай дальше','Откуда смотрите?','Мурашки','Первый раз на эфире'];
   (function loopChat(){addChat(NM[Math.random()*NM.length|0],TX[Math.random()*TX.length|0]); setTimeout(loopChat,5000+Math.random()*4000)})();
@@ -1827,6 +1830,24 @@ if(q.get('demo')!=='0'){
   addChat('Алёна','Привет!'); addChat('Мрак_77','Начинаем?');
   addGift('Витя','Роза ×3');
 }
+
+
+/* настоящий чат и подарки: мост bridge.js (Termux на планшете) шлёт события по WebSocket того же адреса, откуда открыта страница */
+(function(){
+  var u=q.get('ws'); if(!u){ var h=location.hostname; if(location.protocol==='http:'&&h&&h!==''){ u='ws://'+location.host } }
+  if(!u||q.get('ws')==='0') return;
+  var wsk=null, tries=0;
+  function conn(){
+    try{ wsk=new WebSocket(u) }catch(e){ return }
+    wsk.onopen=function(){tries=0};
+    wsk.onmessage=function(ev){ var m; try{m=JSON.parse(ev.data)}catch(e){return}
+      if(m.type==='chat'&&m.text) addChat(m.user||'Зритель',m.text);
+      else if(m.type==='gift') addGift(m.user||'Зритель',(m.name||'Подарок')+((m.count||1)>1?' ×'+m.count:'')) };
+    wsk.onclose=function(){ setTimeout(conn,Math.min(10000,1000+tries++*1500)) };
+    wsk.onerror=function(){ try{wsk.close()}catch(e){} };
+  }
+  conn();
+})();
 
 var sheetsReady=Promise.resolve();
 var libReady=Promise.all(['L','R'].map(function(k){return new Promise(function(res){var im=new Image(); im.onload=function(){PAGEART[k]=im; res()}; im.onerror=res; im.src=PAGESRC[k]})}));
