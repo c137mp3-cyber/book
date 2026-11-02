@@ -206,9 +206,9 @@ function lerp(a,b,t){return a+(b-a)*t}
 var HANDS={
  lens:{img:'assets/hand_lens.webp',W:520,H:1075,sc:.15,xl:3,xr:505,sk:0,taper:1,
    stops:['#3f1d2d','#783f41','#4d2129','#5d2d34','#8b4c51','#673238','#461f27','#462227','#462a40']},
- pinch:{img:'assets/hand_pinch2.webp',W:560,H:1285,px:235,py:48,ba:98,sc:.375,noext:1,s:.97,v:.9,cb:.55},
- palm:{img:'assets/hand_palm2.webp',W:560,H:1087,px:30,py:12,ba:73.5,sc:.41,noext:1,s:.9,v:.55,cb:0},
- two:{img:'assets/hand_two2.webp',W:560,H:998,px:185,py:15,ba:86,sc:.41,noext:1,s:.97,v:.45,cb:.1},
+ pinch:{img:'assets/hand_pinch2.webp',W:560,H:1285,px:235,py:48,ba:98,sc:.375,noext:1,s:.97,v:.9,cb:.55,vr:[.55,.95]},
+ palm:{img:'assets/hand_palm2.webp',W:560,H:1087,px:30,py:12,ba:73.5,sc:.41,noext:1,s:.9,v:.55,cb:0,vr:[.4,.8]},
+ two:{img:'assets/hand_two2.webp',W:560,H:998,px:185,py:15,ba:86,sc:.41,noext:1,s:.97,v:.45,cb:.1,vr:[.35,.75]},
  quill:{img:'assets/hand_quill2.webp',W:560,H:1166,px:100,py:178,ba:72,sc:.4,noext:1}
 };
 function buildHand(h,box,ext){
@@ -376,20 +376,23 @@ var STK=(function(){
   function wAt(y,w,w0){var e=Math.min(y,HP-y)/70; return lerp(w0,w,sm(e))}
   function draw(p){
     if(!img.complete||!img.naturalWidth) return;
-    var wl=lerp(24,63,p), wr=lerp(40,12,p), g=cl.getContext('2d'), W=cl.width, y, w, st=2;
+    var wl=lerp(44,63,p), wr=lerp(36,19,p), g=cl.getContext('2d'), W=cl.width, y, w, st=2;
     g.clearRect(0,0,W,HP);
+    /* открывшаяся кожа под тонким блоком темнеет к страницам, как в тени */
+    var dk=g.createLinearGradient(20,0,W-wl,0); dk.addColorStop(0,'rgba(20,6,2,.10)'); dk.addColorStop(1,'rgba(20,6,2,.62)');
     for(y=0;y<HP;y+=st){ w=wAt(y,wl,63);
       g.drawImage(img,58,Y0p+y,20,st,0,y,20,st);                              /* кожа переплёта как на картине */
-      if(W-w>20) g.drawImage(img,64,Y0p+y,4,st,20,y,W-w-20+.5,st);            /* открывшаяся кожа под тонким блоком */
+      if(W-w>20){ g.drawImage(img,75,Y0p+y,3,st,20,y,W-w-20+.5,st); g.fillStyle=dk; g.fillRect(20,y,W-w-20+.5,st) }
       g.drawImage(img,78,Y0p+y,63,st,W-w,y,w,st);                             /* полоски страниц */
     }
     var sh=g.createLinearGradient(0,0,W,0); sh.addColorStop(0,'rgba(15,4,0,0)'); sh.addColorStop(Math.max(.01,(W-wl)/W),'rgba(15,4,0,'+(.25*(63-wl)/39).toFixed(3)+')'); sh.addColorStop(Math.min(1,(W-wl+3)/W),'rgba(15,4,0,0)');
     g.fillStyle=sh; g.fillRect(0,70,W,HP-140);
     g=cr.getContext('2d'); W=cr.width; g.clearRect(0,0,W,HP);
+    var dk2=g.createLinearGradient(wr+26,0,W,0); dk2.addColorStop(0,'rgba(20,6,2,.55)'); dk2.addColorStop(1,'rgba(20,6,2,.08)');
     for(y=0;y<HP;y+=st){ w=wAt(y,wr,26);
       g.drawImage(img,1320,Y0p+y,26,st,0,y,w,st);
       g.drawImage(img,1346,Y0p+y,26,st,w,y,26,st);
-      if(w<26) g.drawImage(img,1356,Y0p+y,4,st,w+26,y,W-w-26+.5,st);
+      if(w<26){ g.drawImage(img,1362,Y0p+y,3,st,w+26,y,W-w-26+.5,st); g.fillStyle=dk2; g.fillRect(w+26,y,W-w-26+.5,st) }
     }
   }
   function anim(){ var d=goal-cur; cur+=d*.06; if(Math.abs(d)<.002) cur=goal; draw(cur); raf=cur!==goal?requestAnimationFrame(anim):0 }
@@ -655,8 +658,14 @@ function sheetParams(){
     kbx:rnd(.22,.55), kt:rnd(.6,.9), tlag:rnd(.08,.3), g:rnd(2600,4200), kd:rnd(4,9), damp:.5, iter:12, ease:pick(['sine','smoother','io','slow','sine'])};
 }
 /* хват: три узла держит пальцами жёстко, остальной край листа рука ведёт мягко, дальние точки чуть отстают */
-function makeGrab(H){
-  var gi=Math.round(H.s*PAPER.NC), gj=Math.round(H.v*PAPER.NR), R0=PAPER.rest[PAPER.id(gi,gj)*3], Y0=PAPER.rest[PAPER.id(gi,gj)*3+1], pins=[];
+/* каждый раз рука берёт лист в другом месте края: выше или ниже, ближе или дальше от кромки */
+function grabSpot(H){
+  var vr=H.vr||[H.v,H.v];
+  return {s:Math.min(1,Math.max(.8,H.s+rnd(-.07,.03))), v:rnd(vr[0],vr[1])};
+}
+function makeGrab(H,spot){
+  spot=spot||{s:H.s,v:H.v};
+  var gi=Math.round(spot.s*PAPER.NC), gj=Math.round(spot.v*PAPER.NR), R0=PAPER.rest[PAPER.id(gi,gj)*3], Y0=PAPER.rest[PAPER.id(gi,gj)*3+1], pins=[];
   for(var jj=0;jj<=PAPER.NR;jj++){var d=Math.abs(jj-gj), n=PAPER.id(gi,jj);
     pins.push({n:n,dy:PAPER.rest[n*3+1]-Y0,d:d/PAPER.NR,w:d<=1?1:.22*Math.exp(-(d-1)/3.5),x:0,y:0,z:0})}
   return {gi:gi,gj:gj,R0:R0,Y0:Y0,pins:pins,main:PAPER.id(gi,gj)};
@@ -667,29 +676,60 @@ function setGrab(G,e,P){
     pn.x=r*Math.cos(th); pn.y=G.Y0+P.drift*Math.sin(Math.PI*e)+pn.dy*(1-.04*Math.sin(Math.PI*ee)); pn.z=r*Math.sin(th);
   });
 }
+/* у каждого листа свои рваные края: из копии текстуры вырезаются случайные надрывы по внешней кромке и сорванный уголок.
+   Копия нужна только в полёте — лежащая страница остаётся как на картине, поэтому в начале и в конце скачка нет. */
+function leafVar(src,side){
+  var W=src.width, H=src.height, c=document.createElement('canvas'); c.width=W; c.height=H;
+  var g=c.getContext('2d'); g.drawImage(src,0,0);
+  var a=g.getImageData(0,0,W,H).data, sg=side==='R'?1:-1;
+  function edge(y){ y=Math.max(0,Math.min(H-1,Math.round(y)));
+    if(sg>0){for(var x=W-1;x>0;x--) if(a[(y*W+x)*4+3]>128) return x} else {for(var x2=0;x2<W-1;x2++) if(a[(y*W+x2)*4+3]>128) return x2}
+    return sg>0?0:W-1 }
+  function blob(cx,cy,r,rough){
+    var n=7+(Math.random()*5|0), k, ang, rr; g.beginPath();
+    for(k=0;k<n;k++){ang=k/n*6.2832+rnd(-.2,.2); rr=r*rnd(1-rough,1+rough); g.lineTo(cx+Math.cos(ang)*rr,cy+Math.sin(ang)*rr)}
+    g.closePath(); g.fill();
+  }
+  g.globalCompositeOperation='destination-out'; g.fillStyle='#000';
+  var cnt=3+(Math.random()*5|0), i, y, e, r;
+  for(i=0;i<cnt;i++){
+    y=rnd(.06,.94)*H; e=edge(y); r=rnd(7,26)*(Math.random()<.2?1.6:1);
+    blob(e+sg*rnd(-.1,.5)*r, y, r, .35);                    /* надрыв кромки */
+    if(Math.random()<.5) blob(e-sg*r*.2, y+rnd(-r,r), r*.55, .4);
+  }
+  if(Math.random()<.6){                                     /* сорванный уголок */
+    var top=Math.random()<.5, dir=top?1:-1, y0=top?0:H, ce=edge(top?H*.04:H*.96), szx=rnd(26,80), szy=rnd(30,90), mj=rnd(-8,8);
+    g.beginPath(); g.moveTo(ce-sg*szx,y0); g.lineTo(ce-sg*szx*.45+mj,y0+dir*szy*.55); g.lineTo(ce+sg*24,y0+dir*szy);
+    g.lineTo(ce+sg*70,y0+dir*szy); g.lineTo(ce+sg*70,y0-dir*70); g.lineTo(ce-sg*szx,y0-dir*70); g.closePath(); g.fill();
+  }
+  return c;
+}
 /* перевернуть один лист. o: dir (1 справа налево, -1 обратно), F/B текстуры, onStart/onLand, pose; cb по окончании */
 function flipSheet(o,cb){
   var P=sheetParams(), pose=o.pose||pick(['pinch','pinch','palm','two']), H=HANDS[pose], dir=o.dir, ez=EASE[P.ease];
   var mp=mkParams(pose); P.wr=mp.wr; P.side=mp.side*dir;
-  if(GLX) GLX.setTex(o.F,o.B);
+  if(GLX) GLX.setTex(leafVar(o.F,'R'),leafVar(o.B,'L'));
   PAPER.reset();
-  var G=makeGrab(H), pins=G.pins, R0=G.R0, Y0=G.Y0;
-  var TIN=950, TOUT=850, t0=performance.now(), started=false, released=0, relPt=null, blend=0, done=false, last=t0, acc=0, landed=false, handOff=false;
-  var p0=proj(dir,R0,Y0,0);
+  var G=makeGrab(H,grabSpot(H)), pins=G.pins, R0=G.R0, Y0=G.Y0;
+  var TIN=rnd(820,1120), TOUT=rnd(720,980), t0=performance.now(), started=false, released=0, relPt=null, blend=0, done=false, last=t0, acc=0, landed=false, handOff=false;
+  var p0=proj(dir,R0,Y0,0), touched=false;
+  if(RUSTLE) RUSTLE.begin();
   H.fx.style.display='block';
   function arc(a,b,u,amp){var dx=b.x-a.x, dy=b.y-a.y, l=Math.hypot(dx,dy)||1, ww=Math.sin(Math.PI*u)*amp;
     return {x:lerp(a.x,b.x,u)-dy/l*ww, y:lerp(a.y,b.y,u)+dx/l*ww}}
   (function frame(now){
     var t=now-t0, dtr=Math.min(.05,(now-last)/1000); last=now;
     var pt=null, sc=1, rot=0, lift=0;
+    /* на медленном устройстве кадр может перескочить окно подхода: подготовку делаем при первом же кадре после порога */
+    if(!started&&t>TIN-120){started=true; if(o.onStart) o.onStart(); if(GLX) GLX.drawSim(PAPER.p,dir)}
     if(t<TIN){
       var u=EASE.snap(t/TIN); pt=arc(away(p0,560),p0,u,P.side*36);
       sc=1+.07*(1-u); rot=P.side*9*(1-u); lift=14*(1-u)*(1-u)+2*Math.sin(Math.PI*u);
-      if(!started&&t>TIN-120){started=true; if(o.onStart) o.onStart(); if(GLX) GLX.drawSim(PAPER.p,dir)}
     } else {
       var u2=(t-TIN)/P.dur, grabbing=u2<1;
+      if(!touched){touched=true; if(RUSTLE) RUSTLE.touch(1)}
       if(grabbing) setGrab(G,ez(Math.max(0,u2)),P);
-      else if(!released){released=now; var g0=G.main; relPt=proj(dir,PAPER.p[g0*3],PAPER.p[g0*3+1],PAPER.p[g0*3+2])}
+      else if(!released){released=now; if(RUSTLE) RUSTLE.touch(.6); var g0=G.main; relPt=proj(dir,PAPER.p[g0*3],PAPER.p[g0*3+1],PAPER.p[g0*3+2])}
       if(!blend){
         acc+=dtr; var n=0; while(acc>=1/120&&n<4){PAPER.step(1/120,P,grabbing?pins:null); acc-=1/120; n++}
         if(released&&((now-released>450&&PAPER.maxZ()<1.6)||now-released>1900)) blend=now;
@@ -726,7 +766,7 @@ function flipTo(idx,force){
   if(!stuck){
     flipSheet({dir:1,pose:force,F:texOf(2*cur+1,'R'),B:texOf(2*idx,'L'),
       onStart:function(){fillPage(pR,S.pages[2*idx+1],'R',2*idx+2)},
-      onLand:function(){fillPage(pL,S.pages[2*idx],'L',2*idx+1); S.spread=idx; setStack(idx,true); buildSeq(); refreshLens()}},finish);
+      onLand:function(){fillPage(pL,S.pages[2*idx],'L',2*idx+1); fillPage(pR,S.pages[2*idx+1],'R',2*idx+2); S.spread=idx; setStack(idx,true); buildSeq(); refreshLens()}},finish);
     return;
   }
   var j=cur+2;
@@ -742,29 +782,79 @@ function flipTo(idx,force){
 }
 function nextSpread(){flipTo((S.spread+1)%spreadsCount())}
 
-/* ---------- шорох бумаги: синтез из шума, громкость от скорости листа ---------- */
+/* ---------- шорох бумаги: синтез без файлов ----------
+   три слоя: воздушный «свист» листа (шум, яркость растёт со скоростью), низкое тело листа и россыпь коротких хрустов —
+   именно хруст делает звук бумажным. Плюс касание пальцев, хлопок при посадке с затухающим шуршанием и лёгкая «комната». */
+function makeRustle(ac,dest){
+  var SR=ac.sampleRate, i;
+  /* розовый шум на 4 с */
+  var len=SR*4, nb=ac.createBuffer(1,len,SR), d=nb.getChannelData(0), b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+  for(i=0;i<len;i++){var wn=Math.random()*2-1;
+    b0=.99886*b0+wn*.0555179; b1=.99332*b1+wn*.0750759; b2=.96900*b2+wn*.1538520; b3=.86650*b3+wn*.3104856; b4=.55000*b4+wn*.5329522; b5=-.7616*b5-wn*.0168980;
+    d[i]=(b0+b1+b2+b3+b4+b5+b6+wn*.5362)*.11; b6=wn*.115926}
+  /* белый шум для хрустов */
+  var wb=ac.createBuffer(1,SR,SR), wd=wb.getChannelData(0); for(i=0;i<SR;i++) wd[i]=Math.random()*2-1;
+  /* комната: короткий затухающий шумовой импульс */
+  var rl=Math.floor(SR*.32), rb=ac.createBuffer(2,rl,SR);
+  for(var ch=0;ch<2;ch++){var rd=rb.getChannelData(ch); for(i=0;i<rl;i++) rd[i]=(Math.random()*2-1)*Math.pow(1-i/rl,3.2)}
+  var master=ac.createGain(); master.gain.value=2.4;
+  var comp=ac.createDynamicsCompressor(); comp.threshold.value=-16; comp.ratio.value=3.5; comp.attack.value=.004; comp.release.value=.16;
+  var conv=ac.createConvolver(); conv.buffer=rb; var wet=ac.createGain(); wet.gain.value=.16;
+  master.connect(comp); master.connect(conv); conv.connect(wet); wet.connect(comp); comp.connect(dest||ac.destination);
+  function loopSrc(buf){var sn=ac.createBufferSource(); sn.buffer=buf; sn.loop=true; sn.start(0,Math.random()*2); return sn}
+  /* свист листа */
+  var sw=ac.createBiquadFilter(); sw.type='bandpass'; sw.frequency.value=1500; sw.Q.value=.55;
+  var swG=ac.createGain(); swG.gain.value=0; loopSrc(nb).connect(sw); sw.connect(swG); swG.connect(master);
+  /* тело листа */
+  var lo=ac.createBiquadFilter(); lo.type='lowpass'; lo.frequency.value=520; lo.Q.value=.4;
+  var loG=ac.createGain(); loG.gain.value=0; loopSrc(nb).connect(lo); lo.connect(loG); loG.connect(master);
+  var bright=1, nextG=0;
+  /* один хруст: крошечная вспышка шума на случайной частоте */
+  function grain(t,amp,fr){
+    var sn=ac.createBufferSource(); sn.buffer=wb; var f=ac.createBiquadFilter(); f.type='bandpass'; f.frequency.value=fr; f.Q.value=rnd(.9,3.2);
+    var g=ac.createGain(), dur=rnd(.004,.016);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(amp,t+.0012); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+    sn.connect(f); f.connect(g); g.connect(master); sn.start(t,Math.random()*.9); sn.stop(t+dur+.01);
+  }
+  function crinkle(t,amp){ var fr=rnd(1700,6800)*bright; grain(t,amp,fr); if(Math.random()<.45) grain(t+rnd(.003,.011),amp*rnd(.4,.8),fr*rnd(.7,1.4)) }
+  function tail(t,n,amp,span){ for(var k=0;k<n;k++){var u=k/n; crinkle(t+Math.pow(u,1.4)*span+rnd(0,.02),amp*(1-u*.8)*rnd(.5,1))} }
+  return {
+    begin:function(){ bright=rnd(.85,1.25); nextG=0 },                                    /* у каждого листа свой тембр */
+    set:function(v,t){ t=t==null?ac.currentTime:t; var a=Math.min(1,v/9);
+      swG.gain.setTargetAtTime(a*.075,t,.05); sw.frequency.setTargetAtTime((900+a*2400)*bright,t,.05);
+      loG.gain.setTargetAtTime(a*a*.16,t,.07);
+      if(a>.06){ if(nextG<t) nextG=t;
+        while(nextG<t+.04){ crinkle(nextG,rnd(.05,.16)*(.35+a)); nextG+=rnd(.012,.075)/(.25+a*1.6) } }
+    },
+    touch:function(power,t){ t=t==null?ac.currentTime:t; power=power==null?1:power;           /* пальцы берут/отпускают край листа */
+      tail(t,3+(Math.random()*4|0),.08*power,.09);
+      var sn=ac.createBufferSource(); sn.buffer=nb; var f=ac.createBiquadFilter(); f.type='lowpass'; f.frequency.value=420; var g=ac.createGain();
+      g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.05*power,t+.01); g.gain.exponentialRampToValueAtTime(.0001,t+.09);
+      sn.connect(f); f.connect(g); g.connect(master); sn.start(t,Math.random()*3); sn.stop(t+.12) },
+    flap:function(t){ t=t==null?ac.currentTime:t;                                             /* посадка: глухой удар + хлопок + затихающее шуршание */
+      var sn=ac.createBufferSource(); sn.buffer=nb; var f=ac.createBiquadFilter(); f.type='lowpass'; f.frequency.value=rnd(240,360); var g=ac.createGain();
+      g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.26,t+.010); g.gain.exponentialRampToValueAtTime(.0001,t+.2);
+      sn.connect(f); f.connect(g); g.connect(master); sn.start(t,Math.random()*3); sn.stop(t+.22);
+      var s2=ac.createBufferSource(); s2.buffer=wb; var f2=ac.createBiquadFilter(); f2.type='bandpass'; f2.frequency.value=rnd(1800,2800)*bright; f2.Q.value=.8; var g2=ac.createGain();
+      g2.gain.setValueAtTime(0,t); g2.gain.linearRampToValueAtTime(.12,t+.003); g2.gain.exponentialRampToValueAtTime(.0001,t+.05);
+      s2.connect(f2); f2.connect(g2); g2.connect(master); s2.start(t,Math.random()*.9); s2.stop(t+.06);
+      tail(t+.03,7+(Math.random()*6|0),.1,.3) }
+  };
+}
+window.__mkRustle=makeRustle;
 var RUSTLE=(function(){
   if(q.get('sound')==='0') return null;
-  var ac=null, hiG, loG, cr=0;
+  var ac=null, R=null;
   function init(){
     if(ac) return; var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
-    ac=new AC(); var len=ac.sampleRate*2, buf=ac.createBuffer(1,len,ac.sampleRate), d=buf.getChannelData(0);
-    for(var i=0;i<len;i++) d[i]=Math.random()*2-1;
-    function src(){var s=ac.createBufferSource(); s.buffer=buf; s.loop=true; s.start(); return s}
-    var bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3600; bp.Q.value=.6;
-    hiG=ac.createGain(); hiG.gain.value=0; src().connect(bp); bp.connect(hiG); hiG.connect(ac.destination);
-    var lp=ac.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=700;
-    loG=ac.createGain(); loG.gain.value=0; src().connect(lp); lp.connect(loG); loG.connect(ac.destination);
-    window.__rustleBuf=buf;
+    ac=new AC(); R=makeRustle(ac);
   }
   addEventListener('pointerdown',function(){init(); if(ac&&ac.state==='suspended') ac.resume()});
   return {
-    set:function(v){ if(!ac) return; var t=ac.currentTime, a=Math.min(1,v/9);
-      cr=Math.random()<a*.5?rnd(.6,1.4):cr*.6;                         /* хруст: короткие всплески */
-      hiG.gain.setTargetAtTime(a*.07*(.6+cr),t,.03); loG.gain.setTargetAtTime(a*a*.12,t,.06) },
-    flap:function(){ if(!ac) return; var s=ac.createBufferSource(); s.buffer=window.__rustleBuf; var f=ac.createBiquadFilter(); f.type='lowpass'; f.frequency.value=380;
-      var g=ac.createGain(), t=ac.currentTime; g.gain.setValueAtTime(.0001,t); g.gain.linearRampToValueAtTime(.22,t+.012); g.gain.exponentialRampToValueAtTime(.0001,t+.18);
-      s.connect(f); f.connect(g); g.connect(ac.destination); s.start(t,Math.random()); s.stop(t+.2) }
+    begin:function(){ if(R) R.begin() },
+    set:function(v){ if(R) R.set(v) },
+    touch:function(p){ if(R) R.touch(p) },
+    flap:function(){ if(R) R.flap() }
   };
 })();
 
@@ -929,7 +1019,42 @@ var STORY=[
 "Свеча на столе вспыхнула ярче, и я услышал, как кто-то медленно перелистывает страницу.",
 "Я хотел бежать, но ноги будто вросли в доски. Страница за страницей книга писала о том, что происходило со мной сейчас: как я стою, как дрожит свет, как за спиной скрипит пол.",
 "Тогда я понял, что читать нужно было не её. Нужно было слушать. Потому что голос, который диктовал строки, звучал совсем рядом, и принадлежал он вовсе не брату.",
-"Утром нас нашли у калитки. Брат ничего не помнил. А в доме, говорят, на столе до сих пор лежит открытая книга, и в ней появилась новая запись."
+"Утром нас нашли у калитки. Брат ничего не помнил. А в доме, говорят, на столе до сих пор лежит открытая книга, и в ней появилась новая запись.",
+"Глава вторая. Через неделю я вернулся в деревню один. Бабушка Нина, жившая через два дома, увидела меня с дороги и перекрестилась прямо на крыльце.",
+"— Зачем ты туда ходил, — сказала она тихо. — Туда ведь не ходят. Оттуда не возвращаются такими, какими уходили.",
+"Я попытался отшутиться, но она взяла меня за руку, и ладонь у неё оказалась ледяной, хотя день стоял жаркий. Она долго смотрела мне в лицо, будто искала что-то.",
+"— Глаза у тебя те же, — наконец проговорила она. — Только смотришь ты теперь чуть в сторону. Как будто рядом с тобой кто-то стоит.",
+"Я обернулся. Рядом никого не было. Только длинная тень от забора лежала на траве, и в ней, мне показалось, торчало слишком много рук.",
+"Вечером я не мог уснуть. В комнате пахло воском, хотя ни одной свечи я не зажигал. Часы на стене шли, но стрелки показывали три ночи, и так было уже несколько часов.",
+"Я встал, чтобы налить воды, и увидел на кухонном столе лист бумаги. Он лежал ровно посередине, аккуратно, словно его положили специально для меня.",
+"На листе были строки, написанные моим почерком. Я не помнил, чтобы писал их. «Сегодня ты услышишь, как скрипит третья ступенька. Не спускайся».",
+"В нашем доме было всего две ступеньки на веранду. Я пересчитал их трижды. Утром, выглянув в окно, я насчитал три.",
+"Брат позвонил около полудня. Голос у него был чужой, ровный, как у человека, который читает с листа. Он спросил, не находил ли я чего-нибудь странного.",
+"Я рассказал про лист. Он помолчал и ответил: «Не жги его. Они любят, когда жгут. Они потом приходят на запах».",
+"Я спросил, кто такие «они». В трубке что-то зашуршало, будто переворачивали страницы, и голос тихо, почти ласково сказал: «Узнаешь. Ты ведь уже записан».",
+"Связь оборвалась. Я перезвонил, но абонент оказался вне сети. Тогда я пошёл к брату сам, через всю деревню, и по дороге заметил, что собаки провожают меня молча.",
+"Дом брата стоял с распахнутыми окнами. Занавески висели неподвижно, хотя ветер гнул яблони. На подоконнике сидели чёрные птицы, и ни одна не повернула ко мне голову.",
+"Брат сидел за столом спиной к двери. Перед ним лежала толстая тетрадь, и он быстро-быстро писал, не отрывая пера от бумаги, не поднимая глаз.",
+"— Ты пришёл, — сказал он, не оборачиваясь. — Хорошо. Мне осталось дописать твою последнюю страницу. Тебе лучше не смотреть, но ты посмотришь.",
+"Я шагнул ближе и заглянул ему через плечо. Строчки бежали одна за другой, и каждая описывала то, что я делаю в этот самый миг. Как шагаю. Как дышу. Как леденеют пальцы.",
+"Последняя строка была недописана. «И тогда он понял, что за его спиной уже давно стоит». Перо дрогнуло и остановилось. Брат медленно повернул голову.",
+"Лицо у него было спокойное. А глаза совсем белые, как бумага. «Теперь можешь обернуться», — сказал он, и в комнате за моей спиной тихо скрипнула половица.",
+"Я не обернулся. Я закрыл глаза и начал считать до десяти, как делал в детстве, когда было страшно. На счёте семь рядом кто-то вздохнул, и пахнуть стало воском.",
+"На счёте девять я почувствовал, как к моему плечу прикоснулись чьи-то холодные пальцы, и чей-то голос произнёс над самым ухом моё имя. Так, как произносят его только дома.",
+"На счёте десять я открыл глаза. Я стоял на крыльце старого дома у леса, и в руках у меня была свеча. Было утро, и калитка тихо раскачивалась, будто кто-то только что вышел.",
+"Дверь за спиной оказалась закрытой. Я постучал, но никто не ответил. Тогда я заглянул в окно и увидел стол в прихожей, а на нём раскрытую книгу и склонившегося над ней человека.",
+"Человек медленно писал. Я узнал свой свитер, свои волосы, свои худые плечи. Он поднял голову, посмотрел на меня через стекло и улыбнулся так, как никогда не улыбался я сам.",
+"Потом он показал рукой на дверь, будто приглашая войти. А на стекле, с внутренней стороны, проступили буквы. Они складывались в слово, и слово это было «Заходи».",
+"Я простоял на крыльце до самого вечера. Когда стемнело, свеча в моих руках погасла сама, но в окнах дома тут же вспыхнул тёплый свет, и стало видно, как там накрыт стол на троих.",
+"Из темноты вышла бабушка Нина. Она встала рядом и долго молчала, глядя на окна. «Пойдём домой, — сказала она наконец. — Пока не поздно. Он зовёт только того, кто откликнется».",
+"Я сделал шаг назад. Потом ещё один. Свет в окнах дрогнул, и по стёклам одна за другой побежали тёмные тени. Дом будто выдохнул, и в этом выдохе я услышал тысячу шёпотов.",
+"Мы шли по дороге, не оглядываясь. Бабушка крепко держала меня за локоть. На краю деревни она остановилась и вынула из кармана маленькую свечку. «Зажги, — сказала она. — У дома своя свеча. А у тебя будет своя».",
+"Я зажёг. Огонёк встал ровно и тихо, и впервые за много дней на душе стало спокойно. Тень на дороге опять была обычной тенью. Только одной.",
+"С тех пор я не хожу к старому дому. Но иногда, когда ветер стихает, я слышу, как оттуда доносится тихий шелест, будто кто-то переворачивает страницы, и мне кажется, он ещё ждёт.",
+"Брата я больше не видел. Говорят, он уехал в город. Говорят, женился. Только на каждый праздник мне приходит открытка, подписанная его рукой, и каждый раз почерк на ней немного другой.",
+"А в этом году в конверт был вложен чистый лист. Просто белый лист, сложенный вдвое. Я развернул его у окна, и на свету проступили слова, написанные водой: «Скоро твоя очередь читать».",
+"Я зажёг свечу и положил лист рядом. Слова не исчезли. Они проступали всё ярче, и под ними появлялись новые строчки, а я читал их вслух, потому что не мог остановиться.",
+"И вот сейчас, пока я читаю вам эту историю, мне кажется, что за моей спиной кто-то стоит. Спасибо, что остались до конца. Не выключайте свет. И не оборачивайтесь."
 ].join('\n');
 
 window.Book={addChat:addChat,addGift:addGift,setStory:setStory,
@@ -940,8 +1065,8 @@ window.Book={addChat:addChat,addGift:addGift,setStory:setStory,
   clearPreview:function(){GLX.clear()},
   simPreview:function(ms,ov,pose){          /* для проверки: состояние физического листа через ms после начала тяги */
     var P=Object.assign(sheetParams(),{ease:'sine'},ov||{}), H=HANDS[pose||'pinch'];
-    prep(S.spread); GLX.setTex(PREP.f,PREP.b); PAPER.reset();
-    var G=makeGrab(H);
+    prep(S.spread); GLX.setTex(leafVar(PREP.f,'R'),leafVar(PREP.b,'L')); PAPER.reset();
+    var G=makeGrab(H,grabSpot(H));
     for(var t=0;t<ms;t+=1000/120){var u=t/P.dur; if(u<1) setGrab(G,EASE[P.ease](u),P); PAPER.step(1/120,P,u<1?G.pins:null)}
     GLX.drawSim(PAPER.p,1); return {P:P,maxZ:PAPER.maxZ()}}};
 
