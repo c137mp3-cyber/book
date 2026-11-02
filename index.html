@@ -984,10 +984,20 @@ function paperEdgeS(cv,v){
     if(e>W*.4) best=Math.min(best,e/W) }
   return best;
 }
+/* нижний край бумаги в колонке текстуры (доля высоты): ниже него пальцы схватят пустоту */
+function paperEdgeV(cv,sx){
+  if(!cv||!cv.getContext) return 1;
+  var W=cv.width, H=cv.height, g=cv.getContext('2d'), best=1, dx;
+  for(dx=-2;dx<=2;dx++){ var x=Math.max(0,Math.min(W-1,Math.round((sx+dx*.015)*W))), d=g.getImageData(x,0,1,H).data, y, e=0;
+    for(y=H-1;y>=0;y--) if(d[y*4+3]>200){e=y;break}
+    best=Math.min(best,e/H) }
+  return best;
+}
 function makeGrab(H,spot,tex){
   spot=spot||{s:H.s,v:H.v};
   var gj=Math.round(spot.v*PAPER.NR);
-  if(tex){ var se=paperEdgeS(tex,gj/PAPER.NR); spot.s=Math.min(spot.s,se-.03) }
+  if(tex){ var se=paperEdgeS(tex,gj/PAPER.NR); spot.s=Math.min(spot.s,se-.05);
+    var vb=paperEdgeV(tex,spot.s); if(gj/PAPER.NR>vb-.06){ gj=Math.max(1,Math.floor((vb-.06)*PAPER.NR)); se=paperEdgeS(tex,gj/PAPER.NR); spot.s=Math.min(spot.s,se-.05) } }
   var gi=Math.max(1,Math.min(PAPER.NC,Math.floor(spot.s*PAPER.NC+1e-6))), R0=PAPER.rest[PAPER.id(gi,gj)*3], Y0=PAPER.rest[PAPER.id(gi,gj)*3+1], pins=[];
   for(var jj=0;jj<=PAPER.NR;jj++){var d=Math.abs(jj-gj), n=PAPER.id(gi,jj);
     pins.push({n:n,dy:PAPER.rest[n*3+1]-Y0,d:d/PAPER.NR,w:d<1?1:d<2?.6:.15*Math.exp(-(d-2)/2),x:0,y:0,z:0})}
@@ -1120,7 +1130,7 @@ function flipStuck(cur,cb){
   PAPER.reset(); PAPER2.reset();
   var P=sheetParams(), P2=sheetParams(); P.thMax=P2.thMax=rnd(166,174)*Math.PI/180; P.kbx=P2.kbx=1; P.kd=P2.kd=Math.max(P.kd,2.4); P.damp=P2.damp=2.2;
   var eH=rnd(50,62)*Math.PI/180/P.thMax, dMax=rnd(10,14)*Math.PI/180, tilt=rnd(-.5,.5);
-  var GR=makeGrab(HR,{s:1,v:rnd(.9,.95)},fA),        /* левая рука: нижний угол листа A */
+  var GR=makeGrab(HR,{s:1,v:rnd(.85,.91)},fA),        /* левая рука: нижний угол листа A */
       GL=makeGrab(HL,{s:rnd(.92,.99),v:rnd(.38,.58)},fB);         /* правая рука: отлипший край листа B */
   var TIN=rnd(850,1050), D1=rnd(1100,1400), HOLD=rnd(1000,1250), TIN2=rnd(750,900), D2=rnd(1500,1900), D2B=rnd(1500,1900), TOUT=850, SLIDE=(Math.random()<.5?-1:1)*rnd(26,40);
   var tS=TIN+D1+HOLD, t0=performance.now(), last=t0, acc=0, started=false, split=false, lStart=null, eB0=0;
@@ -1446,6 +1456,7 @@ var DRAW=(function(){
   }
   /* в демо: на пустой странице сама собой появляется иллюстрация */
   function auto(){
+    if(q.get('draw')!=='1') return;   /* рисование чудища пока выключено (включить: ?draw=1) */
     if(busy||!data) return; var r=S.pages[2*S.spread+1], l=S.pages[2*S.spread];
     if(r&&r.blank&&!r._pic) run('R'); else if(l&&l.blank&&!l._pic) run('L');
   }
@@ -1660,22 +1671,43 @@ addEventListener('pointerdown',fsIdle); fsIdle();
 
 /* ---------- таблички: чёткий текст с наклоном стены ---------- */
 var TILT=+(q.get('tilt')||-22), ROT=+(q.get('rot')||0);   /* наклон стены назад (градусы) и поворот в плоскости */
-function Plaque(id,max,fs,rot){
+function Plaque(id,max,fs,rot,wrap){
   var el=document.getElementById(id), W=parseFloat(getComputedStyle(el).width), H=parseFloat(getComputedStyle(el).height), R=3;
   el.width=W*R; el.height=H*R;
   var F=document.createElement('canvas'); F.width=W*R; F.height=H*R;
-  var g=el.getContext('2d'), f=F.getContext('2d'), items=[], anim=false, PAD=7, LHp=fs*1.36;
-  function fit(t,w){ if(f.measureText(t).width<=w) return t; while(t.length&&f.measureText(t+'…').width>w) t=t.slice(0,-1); return t+'…' }
+  var g=el.getContext('2d'), f=F.getContext('2d'), items=[], anim=false, PAD=7, LHp=fs*1.3, MINS=.6;
+  function fB(sc){return '600 '+(fs*sc)+'px Lora, Georgia, serif'}
+  function fN(sc){return fs*sc+'px Lora, Georgia, serif'}
+  function mw(t,font){f.font=font; return f.measureText(t).width}
+  function fit(t,w,font){ if(mw(t,font)<=w) return t; while(t.length&&mw(t+'…',font)>w) t=t.slice(0,-1); return t+'…' }
+  /* строки записи: всё в одну строку (при нужде мельче), длинное — переносится на вторую */
+  function layout(it){
+    var w=W-2*PAD, nm=it.name, nW=mw(nm,fB(1)), tx=it.sep+it.text, tW=mw(tx,fN(1)), tot=nW+tW;
+    if(nW>w*.6){nm=fit(nm,w*.6,fB(1)); nW=mw(nm,fB(1)); tot=nW+tW}
+    if(tot<=w) return [{s:1,a:nm,b:tx}];
+    if(tot*MINS<=w && (!wrap || tot*.85<=w)){ var sc=Math.min(1,w/tot); return [{s:sc,a:nm,b:tx}] }
+    if(!wrap){ var sc0=MINS; return [{s:sc0,a:nm,b:fit(tx,w-mw(nm,fB(sc0)),fN(sc0))}] }
+    var sc1=.86, words=tx.split(' '), l1='', i=0, room=w-mw(nm,fB(sc1));
+    while(i<words.length && mw((l1?l1+' ':'')+words[i],fN(sc1))<=room){ l1+=(l1?' ':'')+words[i]; i++ }
+    if(!l1){ l1=fit(words[0]||'',room,fN(sc1)); i=1 }
+    var rest=words.slice(i).join(' ');
+    if(!rest) return [{s:sc1,a:nm,b:l1}];
+    var t2=mw(rest,fN(sc1)), sc2=t2<=w?sc1:Math.max(MINS,w/t2);
+    return [{s:sc1,a:nm,b:l1},{s:sc2,a:'',b:fit(rest,w,fN(sc2))}];
+  }
   function flat(now){
     f.setTransform(R,0,0,R,0,0); f.clearRect(0,0,W,H); f.textBaseline='middle';
-    var y0=H/2-(items.length-1)*LHp/2, busy=false;
-    items.forEach(function(it,i){
-      var a=Math.min(1,(now-it.t0)/650); if(a<1) busy=true;
-      f.globalAlpha=a; var x=PAD, y=y0+i*LHp, w=W-2*PAD;
-      f.font='600 '+fs+'px Lora, Georgia, serif'; f.fillStyle='#5e1d09';
-      var n=fit(it.name,w*.62); f.fillText(n,x,y); x+=f.measureText(n).width;
-      f.font=fs+'px Lora, Georgia, serif'; f.fillStyle='#24120a';
-      f.fillText(fit(it.sep+it.text,W-PAD-x),x,y);
+    var tot=0, k;
+    for(k=0;k<items.length;k++){ items[k].L=layout(items[k]); tot+=items[k].L.length }
+    while(items.length>1 && tot>max){ tot-=items[0].L.length; items.shift() }
+    var y0=H/2-(tot-1)*LHp/2, busy=false, row=0;
+    items.forEach(function(it){
+      var a=Math.min(1,(now-it.t0)/650); if(a<1) busy=true; f.globalAlpha=a;
+      it.L.forEach(function(ln){
+        var x=PAD, y=y0+row*LHp; row++;
+        if(ln.a){ f.font=fB(ln.s); f.fillStyle='#5e1d09'; f.fillText(ln.a,x,y); x+=f.measureText(ln.a).width }
+        f.font=fN(ln.s); f.fillStyle='#24120a'; f.fillText(ln.b,x,y);
+      });
     });
     f.globalAlpha=1; return busy;
   }
@@ -1696,14 +1728,14 @@ function Plaque(id,max,fs,rot){
   function render(now){ var busy=flat(now); warp(); if(busy) requestAnimationFrame(render); else anim=false }
   document.fonts.ready.then(function(){if(!anim){anim=true; requestAnimationFrame(render)}});
   return {add:function(name,sep,text){
-    items.push({name:String(name),sep:sep,text:String(text),t0:performance.now()}); while(items.length>max) items.shift();
+    items.push({name:String(name),sep:sep,text:String(text),t0:performance.now()}); while(items.length>8) items.shift();
     if(!anim){anim=true; requestAnimationFrame(render)}
   }};
 }
-var PCHAT=Plaque('chatPlaque',3,14.5,.9), PGIFT=Plaque('giftsPlaque',2,15,0);
+var PCHAT=Plaque('chatPlaque',4,13.5,.9,true), PGIFT=Plaque('giftsPlaque',3,13.5,0,true);
 function addChat(name,text){ PCHAT.add(String(name).slice(0,24),': ',String(text).slice(0,90)) }
 function addGift(name,gift){
-  PGIFT.add(String(name).slice(0,20),' · ',String(gift).slice(0,24));
+  PGIFT.add(String(name).slice(0,24),' · ',String(gift).slice(0,40));
   var gl2=document.getElementById('giftLight'); gl2.classList.remove('flash'); void gl2.offsetWidth; gl2.classList.add('flash');
 }
 
