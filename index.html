@@ -677,6 +677,7 @@ function buildSeq(){
 }
 
 /* ---------- 3D-лист (WebGL) ---------- */
+var FADE=170;   /* мс: GL-лист плавно растворяется поверх уже нарисованной страницы, без «прыжка» при посадке */
 var THICK=+(q.get('thick')||3.6);   /* толщина листа в полёте, px сцены */
 var GLX=(function(){
   var CW=BW+2*MX, CH=BH+2*MY, PR=2;
@@ -689,14 +690,14 @@ var GLX=(function(){
     'varying vec2 vUV;varying vec3 vN;'+
     'void main(){float k=2600.0/(2600.0-aPos.z);float sx=uCam.x+(aPos.x-uCam.x)*k;float sy=uCam.y+(aPos.y-uCam.y)*k;'+
     'gl_Position=vec4(((sx+uCam.z)/uSize.x)*2.0-1.0,1.0-((sy+uCam.w)/uSize.y)*2.0,-aPos.z/2000.0,1.0);vUV=aUV;vN=aNrm;}';
-  var fs='precision mediump float;uniform sampler2D uF;uniform sampler2D uB;uniform float uSh;varying vec2 vUV;varying vec3 vN;'+
+  var fs='precision mediump float;uniform sampler2D uF;uniform sampler2D uB;uniform float uSh;uniform float uA;uniform vec2 uUVs;varying vec2 vUV;varying vec3 vN;'+
     'void main(){vec3 n=normalize(vN);vec4 t;'+
-    'if(n.z>=0.0){t=texture2D(uF,vUV);}else{t=texture2D(uB,vec2(1.0-vUV.x,vUV.y));n=-n;}'+
-    'if(uSh>0.0){gl_FragColor=vec4(0.0,0.0,0.0,t.a*uSh);return;}'+
-    'if(uSh<0.0){gl_FragColor=vec4(t.rgb*vec3(0.62,0.55,0.46),t.a);return;}'+
+    'if(n.z>=0.0){t=texture2D(uF,vUV*uUVs,-1.0);}else{t=texture2D(uB,vec2(1.0-vUV.x,vUV.y)*uUVs,-1.0);n=-n;}'+
+    'if(uSh>0.0){gl_FragColor=vec4(0.0,0.0,0.0,t.a*uSh)*uA;return;}'+
+    'if(uSh<0.0){gl_FragColor=vec4(t.rgb*vec3(0.62,0.55,0.46),t.a)*uA;return;}'+
     'float d=max(dot(n,normalize(vec3(-0.35,-0.45,0.82))),0.0);'+
     'float s=(0.5+0.62*d)/(0.5+0.62*0.82);'+
-    'float w=clamp(1.0-s,0.0,1.0);gl_FragColor=vec4(t.rgb*(vec3(s)+w*vec3(0.30,0.15,0.04)),t.a);}';
+    'float w=clamp(1.0-s,0.0,1.0);gl_FragColor=vec4(t.rgb*(vec3(s)+w*vec3(0.30,0.15,0.04)),t.a)*uA;}';
   var pr=gl.createProgram(); gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs)); gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(pr);
   if(!gl.getProgramParameter(pr,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(pr)); return null}
   gl.useProgram(pr);
@@ -711,7 +712,7 @@ var GLX=(function(){
   attr('aPos',bPos,3); attr('aNrm',bNrm,3); attr('aUV',bUV,2);
   gl.uniform4f(gl.getUniformLocation(pr,'uCam'),BW/2,BH/2,MX,MY);
   gl.uniform2f(gl.getUniformLocation(pr,'uSize'),CW,CH);
-  var uSh=gl.getUniformLocation(pr,'uSh');
+  var uSh=gl.getUniformLocation(pr,'uSh'), uUVs=gl.getUniformLocation(pr,'uUVs'), uA=gl.getUniformLocation(pr,'uA'); gl.uniform2f(uUVs,1,1); gl.uniform1f(uA,1);
   gl.uniform1i(gl.getUniformLocation(pr,'uF'),0); gl.uniform1i(gl.getUniformLocation(pr,'uB'),1);
   var ANI=gl.getExtension('EXT_texture_filter_anisotropic')||gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
   /* текстуры листа — в степень двойки с мипмапами: лист ребром к камере не рассыпается на дробные буквы */
@@ -725,7 +726,7 @@ var GLX=(function(){
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
   function upload(unit,tex,cv){gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,tex);
-    potG.clearRect(0,0,1024,2048); potG.imageSmoothingQuality='high'; potG.drawImage(cv,0,0,1024,2048);
+    potG.clearRect(0,0,1024,2048); potG.drawImage(cv,0,0); gl.uniform2f(uUVs,cv.width/1024,cv.height/2048);
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,potC); gl.generateMipmap(gl.TEXTURE_2D)}
   /* сетка: phi(s,v) — угол листа в точке; интегрируем вдоль ширины */
   var PP=null;
@@ -763,15 +764,15 @@ var GLX=(function(){
         for(k=0;k<3;k++) xyz[k]=lerp(cr(i0,fu,j0,k),cr(i0,fu,j0+1,k),fv);
         pos[o]=LX0+dir*xyz[0]; pos[o+1]=LY0+xyz[1]; pos[o+2]=Math.max(0,xyz[2]) } }
     normals() }
-  function drawSim(sp,dir){ fillSim(sp,dir); render(true) }
+  function drawSim(sp,dir,a){ gl.uniform1f(uA,a==null?1:a); fillSim(sp,dir); render(true); gl.uniform1f(uA,1) }
   function bindSet(k){ gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,k?tF2:tF); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,k?tB2:tB) }
   /* несколько листов сразу (слипшиеся страницы): list = [{sp,dir,set,thick}] */
   function drawSims(list){
     gl.viewport(0,0,glc.width,glc.height); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,bIdx);
-    list.forEach(function(it){ fillSim(it.sp,it.dir); bindSet(it.set); shadows() });
-    list.forEach(function(it){ fillSim(it.sp,it.dir); bindSet(it.set); sheet(it.thick==null?THICK:it.thick) });
-    bindSet(0);
+    list.forEach(function(it){ gl.uniform1f(uA,it.a==null?1:it.a); fillSim(it.sp,it.dir); bindSet(it.set); shadows() });
+    list.forEach(function(it){ gl.uniform1f(uA,it.a==null?1:it.a); fillSim(it.sp,it.dir); bindSet(it.set); sheet(it.thick==null?THICK:it.thick) });
+    gl.uniform1f(uA,1); bindSet(0);
   }
   function render(showShadow){
     gl.viewport(0,0,glc.width,glc.height); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
@@ -1013,7 +1014,7 @@ function flipSheet(o,cb){
   PAPER.reset();
   var G=makeGrab(H,grabSpot(H),fTex), pins=G.pins, R0=G.R0, Y0=G.Y0;
   var TIN=rnd(820,1120), TOUT=rnd(720,980), t0=performance.now(), started=false, released=0, relPt=null, blend=0, done=false, last=t0, acc=0, landed=false, handOff=false;
-  var p0=proj(dir,R0,Y0,0), touched=false, prevE=null, sSm=0;
+  var p0=proj(dir,R0,Y0,0), touched=false, prevE=null, sSm=0, landT=0, cleared=false;
   if(RUSTLE) RUSTLE.begin();
   showHand(H,true);
   function arc(a,b,u,amp){var dx=b.x-a.x, dy=b.y-a.y, l=Math.hypot(dx,dy)||1, ww=Math.sin(Math.PI*u)*amp;
@@ -1038,9 +1039,9 @@ function flipSheet(o,cb){
       }
       if(blend){
         var bt=Math.min(1,(now-blend)/260); PAPER.blendToLeft(bt*bt*.5+.08);
-        if(bt>=1&&!landed){landed=true; if(GLX) GLX.clear(); if(o.onLand) o.onLand(); if(RUSTLE) RUSTLE.flap()}
+        if(bt>=1&&!landed){landed=true; landT=now; if(o.onLand) o.onLand(); if(RUSTLE) RUSTLE.flap()}
       }
-      if(!landed&&GLX) GLX.drawSim(PAPER.p,dir);
+      if(GLX){ if(!landed) GLX.drawSim(PAPER.p,dir); else if(now-landT<FADE) GLX.drawSim(PAPER.p,dir,1-(now-landT)/FADE); else if(!cleared){cleared=true; GLX.clear()} }
       var gn=G.main;
       /* скорость листа меряем по времени (средняя по кромке), чтобы шорох шёл всю тягу, а не только после отпускания */
       if(RUSTLE){ var ex=0,ey=0,ez2=0,cn=0; for(var jj=0;jj<=PAPER.NR;jj+=3){var on=PAPER.id(PAPER.NC,jj)*3; ex+=PAPER.p[on]; ey+=PAPER.p[on+1]; ez2+=PAPER.p[on+2]; cn++}
@@ -1125,7 +1126,7 @@ function flipStuck(cur,cb){
     if(S0.rel&&!S0.blend&&((now-S0.rel>450&&S0.pp.maxZ()<1.6)||now-S0.rel>1900)) S0.blend=now;
     if(S0.blend&&!S0.landed){ var bt=Math.min(1,(now-S0.blend)/260), k=bt*bt*.5+.08;
       if(S0.toLeft) S0.pp.blendToLeft(k); else S0.pp.blendToRight(k);
-      if(bt>=1){S0.landed=true; S0.onLand(); if(RUSTLE) RUSTLE.flap()} }
+      if(bt>=1){S0.landed=true; S0.landT=now; S0.onLand(); if(RUSTLE) RUSTLE.flap()} }
   }
   A.onLand=function(){fillPage(pL,S.pages[2*idx],'L',2*idx+1)};
   B.onLand=function(){fillPage(pR,S.pages[2*idx+1],'R',2*idx+2)};
@@ -1155,8 +1156,8 @@ function flipStuck(cur,cb){
         ptL=arc(away(tg,560,HL),tg,ua,-side*30); scL=tg.k+.07*(1-ua); liftL=14*(1-ua)*(1-ua)+(tg.k-1)*110; poseSet(HL,handPhase('in',(t-(tS-TIN2))/TIN2)) }
       if(split){
         var ul=(t-tS)/D2B; grabL=ul<1;
-        if(grabL){ setGrab(GL,eB0*(1-EASE.sine(Math.min(1,ul))),P2);
-          var kb=Math.min(1,(t-tS)/260), sl=SLIDE*ss(.3,.95,ul);          /* мягкий перехват, потом пальцы проводят вдоль края */
+        if(grabL){ setGrab(GL,eB0*(1-ss(0,.72,ul)),P2);
+          var kb=Math.min(1,(t-tS)/260), sl=SLIDE*Math.sin(Math.PI*ss(.22,1,ul));       /* скольжение вдоль края возвращается в ноль: на отпускании лист не дёргается */          /* мягкий перехват, потом пальцы проводят вдоль края */
           GL.pins.forEach(function(pn,ii){var s0=lStart[ii]; pn.y+=sl; pn.x=lerp(s0[0],pn.x,kb); pn.y=lerp(s0[1],pn.y,kb); pn.z=lerp(s0[2],pn.z,kb)});
           ptL=nodePt(PAPER2,GL.main); scL=ptL.k; liftL=(ptL.k-1)*110+1.5; poseSet(HL,handPhase('pull',0)) }
         else if(!relL){relL=now; relLPt=nodePt(PAPER2,GL.main); B.rel=now; if(RUSTLE) RUSTLE.touch(.6)}
@@ -1170,7 +1171,7 @@ function flipStuck(cur,cb){
         acc-=1/120; n++ }
       if(!split) deriveB();
       settle(A,now); if(split) settle(B,now);
-      if(GLX){ var L=[]; if(!B.landed) L.push({sp:PAPER2.p,dir:1,set:1,thick:THICK}); if(!A.landed) L.push({sp:PAPER.p,dir:1,set:0,thick:THICK});
+      if(GLX){ var L=[]; [[B,PAPER2,1],[A,PAPER,0]].forEach(function(e){ var a=e[0].landed?1-(now-e[0].landT)/FADE:1; if(a>0) L.push({sp:e[1].p,dir:1,set:e[2],thick:THICK,a:a}) });
         if(L.length) GLX.drawSims(L); else GLX.clear() }
       if(RUSTLE){ var ra=edgeSpeed(PAPER,prevA,dtr); prevA=ra[1]; var v=ra[0];
         if(split){var rb=edgeSpeed(PAPER2,prevB,dtr); prevB=rb[1]; v=Math.max(v,rb[0])}
