@@ -243,8 +243,8 @@ function pmix(a,b,k){k=Math.max(0,Math.min(1,k)); var m={}; if(a===b){m[a]=1;ret
 /* поза по фазе листания: подлёт (раскрытая → пальцы расходятся → щипок), тяга (щипок → кисть приподнята), отпускание (пальцы раскрываются → расслабленная) */
 function handPhase(kind,x){
   if(kind==='in'){ if(x<.5) return {open:1}; if(x<.64) return pmix('open','spread',(x-.5)/.14); if(x<.86) return {spread:1}; return pmix('spread','pinch',(x-.86)/.1) }
-  if(kind==='pull'){ if(x<.12) return {pinch:1}; return pmix('pinch','lift',(x-.12)/.12) }
-  if(x<.14) return pmix('lift','release',x/.14); if(x<.5) return {release:1}; return pmix('release','open',(x-.5)/.25);
+  if(kind==='pull') return {pinch:1};            /* всю тягу кисть держит щипок и идёт за предплечьем, без выкручивания */
+  if(x<.14) return pmix('pinch','release',x/.14); if(x<.5) return {release:1}; return pmix('release','open',(x-.5)/.25);
 }
 function showHand(h,on){h.fx.style.display=on?'block':'none'; if(h.ufx) h.ufx.style.display=on?'block':'none'}
 function buildHand(h,box,ext){
@@ -336,72 +336,74 @@ function inkCanvas(pg,side,num){
 }
 /* страница = вырезка нарисованной страницы из картины + текст, впитанный в бумагу */
 var PAGESRC={L:'assets/pageL2.webp',R:'assets/pageR2.webp'}, PAGEART={}, TEXT=Q;
-/* ---------- листы: у каждого физического листа своя бумага (картинка), оборот — её зеркало ----------
-   правая страница разворота i и левая страница разворота i+1 — один и тот же лист */
-var SHEETSRC=['assets/sheet0.webp','assets/sheet1.webp','assets/sheet2.webp','assets/sheet3.webp','assets/sheet4.webp','assets/sheet5.webp','assets/sheet6.webp'];
-var SHEETS=[], SHEETMAP={};
+/* ---------- уникальные страницы ----------
+   бумага — с самой картины; у каждого физического листа свой край: зазубрины, надрывы, иногда сорванный уголок, замятина
+   и (редко) маленькое пятно. Правая страница разворота i и левая разворота i+1 — один лист, у оборота те же надрывы зеркально.
+   В надрыве видна следующая страница — чуть темнее и с тенью от верхней, как в настоящей книге */
+var SHEETMAP={};
 function sheetIdOf(p){return p%2?(p-1)/2:p/2-1}
-function sheetOf(p){
-  var id=sheetIdOf(p);
-  if(!SHEETMAP[id]){
-    var n=SHEETS.length*2, prev=SHEETMAP[id-1], k;
-    do{k=Math.random()*n|0}while(n>2&&prev&&k===prev.k);
-    SHEETMAP[id]={k:k};
-  }
-  var k2=SHEETMAP[id].k; return SHEETS.length?SHEETS[k2>>1][k2&1]:null;
+function genSheet(){
+  function notches(n,dmin,dmax,wmin,wmax){var a=[]; for(var i=0;i<n;i++) a.push({c:rnd(.04,.96),d:rnd(dmin,dmax),w:rnd(wmin,wmax),p:pick([.6,1,1.6]),j:rnd(-.3,.3)}); return a}
+  var S={outer:notches(1+(Math.random()*5|0),4,16,.012,.05), top:notches(Math.random()*3|0,2,7,.03,.09), bot:notches(Math.random()*3|0,2,7,.03,.09),
+    ph:[rnd(0,9),rnd(0,9),rnd(0,9)], corner:Math.random()<.22?{top:Math.random()<.5,sx:rnd(14,34),sy:rnd(14,40)}:null,
+    crease:Math.random()<.3?{v:rnd(.15,.85),len:rnd(.18,.45),ang:rnd(-.5,.5),bend:rnd(-.06,.06)}:null,
+    stain:Math.random()<.1?{u:rnd(.25,.8),v:rnd(.15,.85),r:rnd(.025,.05),n:6+(Math.random()*4|0),seed:rnd(0,9)}:null};
+  if(Math.random()<.2) S.outer.push({c:rnd(.1,.9),d:rnd(18,28),w:rnd(.006,.012),p:.5,j:0});      /* редкий узкий надрыв */
+  return S;
 }
+function sheetOf(p){var id=sheetIdOf(p); return SHEETMAP[id]||(SHEETMAP[id]=genSheet())}
 function relRaw(arr,side,x){var X=RELX[side], A=arr[side], i;
   if(x<=X[0]) return A[0]; if(x>=X[X.length-1]) return A[A.length-1];
   for(i=1;i<X.length;i++) if(x<=X[i]){var u=(x-X[i-1])/(X[i]-X[i-1]); return lerp(A[i-1],A[i],u)} return A[A.length-1]}
-/* светотень нарисованной страницы (размытая яркость), чтобы новый лист лёг под тот же свет свечи */
-var SHADE={};
-function shadeOf(side){
-  if(SHADE[side]) return SHADE[side];
-  var art=PAGEART[side], W=art.width, H=art.height, c=document.createElement('canvas'); c.width=W; c.height=H; var g=c.getContext('2d');
-  g.filter='blur(14px)'; g.drawImage(art,0,0); g.filter='none';
-  var d=g.getImageData(0,0,W,H), a=d.data, L=[], i;
-  for(i=0;i<a.length;i+=4*37) if(a[i+3]>200) L.push(.3*a[i]+.59*a[i+1]+.11*a[i+2]);
-  L.sort(function(x,y){return x-y}); var ref=L[Math.floor(L.length*.9)]||200;
-  for(i=0;i<a.length;i+=4){var l=(.3*a[i]+.59*a[i+1]+.11*a[i+2])/ref, v=Math.max(0,Math.min(255,255*Math.pow(Math.min(1.05,l),1.15))); a[i]=a[i+1]=a[i+2]=v; a[i+3]=255}
-  g.putImageData(d,0,0); SHADE[side]=c; return c;
+/* края нарисованной страницы в пикселях текстуры: внешний край по строкам, верх и низ по столбцам (считаются один раз) */
+var EDGE={};
+function edgesOf(side){
+  if(EDGE[side]) return EDGE[side];
+  var art=PAGEART[side], W=art.width, H=art.height, c=document.createElement('canvas'); c.width=W; c.height=H; var g=c.getContext('2d'); g.drawImage(art,0,0);
+  var a=g.getImageData(0,0,W,H).data, xo=new Float32Array(H), yt=new Float32Array(W), yb=new Float32Array(W), x, y;
+  for(y=0;y<H;y++){ xo[y]=-1;
+    if(side==='R'){for(x=W-1;x>=0;x--) if(a[(y*W+x)*4+3]>128){xo[y]=x;break}} else {for(x=0;x<W;x++) if(a[(y*W+x)*4+3]>128){xo[y]=x;break}} }
+  for(x=0;x<W;x++){ yt[x]=-1; yb[x]=-1;
+    for(y=0;y<H;y++) if(a[(y*W+x)*4+3]>128){yt[x]=y;break}
+    for(y=H-1;y>=0;y--) if(a[(y*W+x)*4+3]>128){yb[x]=y;break} }
+  EDGE[side]={xo:xo,yt:yt,yb:yb,W:W,H:H}; return EDGE[side];
 }
-/* лист ложится по рельефу страницы: каждый столбик картинки растягивается между верхним и нижним краем.
-   Картинка чуть больше нарисованной страницы: та выглядывает только в надрывах и вырезах листа */
-var SH_IN={t:-3,b:-3,o:-4,s:0};
-function warpSheet(img,side,W,H){
-  var c=document.createElement('canvas'); c.width=W; c.height=H; var g=c.getContext('2d'), src=img;
-  if(side==='L'){ src=document.createElement('canvas'); src.width=img.width; src.height=img.height; var mg=src.getContext('2d'); mg.translate(img.width,0); mg.scale(-1,1); mg.drawImage(img,0,0) }
-  var left=side==='R'?LX0:LX0-LW, sp=LX0, outer=side==='R'?RELX.R[RELX.R.length-1]-SH_IN.o:RELX.L[0]+SH_IN.o,
-      xa=side==='R'?sp+SH_IN.s:outer, xb=side==='R'?outer:sp-SH_IN.s, NCOL=120, iw=src.width, ih=src.height;
-  for(var k=0;k<NCOL;k++){
-    var u0=k/NCOL, u1=(k+1)/NCOL, X0=xa+(xb-xa)*u0, X1=xa+(xb-xa)*u1, Xm=(X0+X1)/2,
-        t=relRaw(RELT,side,Xm)+SH_IN.t, b=relRaw(RELB,side,Xm)-SH_IN.b;
-    g.drawImage(src,u0*iw,0,(u1-u0)*iw,ih,(X0-left)*TEXT,(t-LY0)*TEXT,(X1-X0)*TEXT+.8,(b-t)*TEXT);
-  }
+function prof(list,t,ph){var d=1.2+.9*Math.sin(t*47+ph)+.6*Math.sin(t*131+ph*2);       /* мелкая рваность везде */
+  list.forEach(function(n){var q=Math.abs(t-n.c)/n.w; if(q<1) d+=n.d*Math.pow(1-q,n.p)*(1+n.j*Math.sin(q*9))}); return Math.max(0,d)}
+/* маска листа: из нарисованной страницы вырезаются надрывы по трём кромкам и уголок */
+function sheetMask(sh,side){
+  var E=edgesOf(side), W=E.W, H=E.H, c=document.createElement('canvas'); c.width=W; c.height=H; var g=c.getContext('2d');
+  g.drawImage(PAGEART[side],0,0); g.globalCompositeOperation='destination-out'; g.fillStyle='#000';
+  var sg=side==='R'?1:-1, y, x, st=3, k=TEXT;
+  /* внешняя кромка */
+  g.beginPath(); g.moveTo(sg>0?W+5:-5,-5);
+  for(y=0;y<=H;y+=st){var xo=E.xo[Math.min(H-1,y)]; if(xo<0) continue; g.lineTo(xo-sg*prof(sh.outer,y/H,sh.ph[0])*k,y)}
+  g.lineTo(sg>0?W+5:-5,H+5); g.closePath(); g.fill();
+  /* верх и низ: u считается от корешка, чтобы надрывы оборота совпадали зеркально */
+  ['top','bot'].forEach(function(e,ei){ g.beginPath(); g.moveTo(-5,ei?H+5:-5);
+    for(x=0;x<=W;x+=st){var xx=Math.min(W-1,x), yy=ei?E.yb[xx]:E.yt[xx]; if(yy<0) continue; var u=side==='R'?x/W:1-x/W; g.lineTo(x,yy+(ei?-1:1)*prof(sh[e],u,sh.ph[1+ei])*k*.8)}
+    g.lineTo(W+5,ei?H+5:-5); g.closePath(); g.fill() });
+  if(sh.corner){ var cy=sh.corner.top?0:H, dy=sh.corner.top?1:-1, yr=Math.round(sh.corner.top?H*.03:H*.97), xo2=E.xo[yr]>0?E.xo[yr]:(sg>0?W:0);
+    g.beginPath(); g.moveTo(xo2-sg*sh.corner.sx*k,cy-dy*5); g.lineTo(xo2-sg*sh.corner.sx*k*.45,cy+dy*sh.corner.sy*k*.35);
+    g.lineTo(xo2+sg*4,cy+dy*sh.corner.sy*k); g.lineTo(xo2+sg*40,cy+dy*sh.corner.sy*k); g.lineTo(xo2+sg*40,cy-dy*40); g.lineTo(xo2-sg*sh.corner.sx*k,cy-dy*40); g.closePath(); g.fill() }
+  g.globalCompositeOperation='source-over';
   return c;
 }
-/* слой листа для стороны: изгиб + светотень страницы + цвет подогнан под нарисованную бумагу (кэш на вариант) */
-var LAYER={};
-function sheetLayer(p,side){
-  var id=sheetIdOf(p); sheetOf(p); var k=SHEETMAP[id].k, key=k+side;
-  if(LAYER[key]) return LAYER[key];
-  var art=PAGEART[side], W=art.width, H=art.height, img=SHEETS[k>>1][k&1];
-  var ws=warpSheet(img,side,W,H), c=document.createElement('canvas'); c.width=W; c.height=H; var g=c.getContext('2d');
-  g.drawImage(ws,0,0); g.globalCompositeOperation='multiply'; g.drawImage(shadeOf(side),0,0);
-  g.globalCompositeOperation='destination-in'; g.drawImage(ws,0,0); g.globalCompositeOperation='source-over';
-  var d=g.getImageData(0,0,W,H), A=d.data, ac=document.createElement('canvas'); ac.width=W; ac.height=H; var ag=ac.getContext('2d'); ag.drawImage(art,0,0);
-  var B=ag.getImageData(0,0,W,H).data, ms=[0,0,0], ma=[0,0,0], ns=0, na=0, i;
-  for(i=0;i<A.length;i+=4*7){ if(A[i+3]>220){ms[0]+=A[i];ms[1]+=A[i+1];ms[2]+=A[i+2];ns++} if(B[i+3]>220){ma[0]+=B[i];ma[1]+=B[i+1];ma[2]+=B[i+2];na++} }
-  var gn=[0,1,2].map(function(j){var v=(ma[j]/na)/(ms[j]/ns||1); v=Math.max(.7,Math.min(1.7,v)); return 1+(v-1)*.85});
-  for(i=0;i<A.length;i+=4){A[i]=Math.min(255,A[i]*gn[0]); A[i+1]=Math.min(255,A[i+1]*gn[1]); A[i+2]=Math.min(255,A[i+2]*gn[2])}
-  g.putImageData(d,0,0);
-  LAYER[key]=c; return c;
+/* точка листа (u от корешка, v сверху) в пикселях текстуры стороны */
+function uvPx(side,u,v){var sp=LX0, outer=side==='R'?RELX.R[RELX.R.length-1]:RELX.L[0], X=sp+(outer-sp)*u, t=relRaw(RELT,side,X), b=relRaw(RELB,side,X), left=side==='R'?LX0:LX0-LW;
+  return [(X-left)*TEXT,(t+(b-t)*v-LY0)*TEXT]}
+function sheetMarks(g,sh,side){
+  if(sh.crease){ var cr=sh.crease, pts=[]; for(var i=0;i<=12;i++){var t=i/12, u=1-cr.len*t, v=cr.v+cr.ang*cr.len*t*.6+cr.bend*Math.sin(Math.PI*t); pts.push(uvPx(side,u,v))}
+    [[1.2,'rgba(95,55,20,.20)',1],[1,'rgba(255,244,215,.30)',-1]].forEach(function(s2){ g.beginPath(); pts.forEach(function(p,i){i?g.lineTo(p[0],p[1]+s2[2]):g.moveTo(p[0],p[1]+s2[2])}); g.lineWidth=s2[0]*TEXT/2; g.strokeStyle=s2[1]; g.stroke() }) }
+  if(sh.stain){ var st=sh.stain, cpt=uvPx(side,st.u,st.v), R=st.r*LW*TEXT; g.save(); g.globalCompositeOperation='multiply'; g.beginPath();
+    for(var j=0;j<=st.n;j++){var an=j/st.n*6.283, rr=R*(.75+.25*Math.sin(an*3+st.seed)+.12*Math.sin(an*7+st.seed*2)); j?g.lineTo(cpt[0]+Math.cos(an)*rr,cpt[1]+Math.sin(an)*rr):g.moveTo(cpt[0]+Math.cos(an)*rr,cpt[1]+Math.sin(an)*rr)}
+    g.closePath(); g.fillStyle='rgba(170,115,55,.13)'; g.fill(); g.lineWidth=1.4; g.strokeStyle='rgba(130,80,35,.16)'; g.stroke(); g.restore() }
 }
 function pageTex(pg,side,num){
   if(pg._t&&pg._t.side===side) return pg._t.cv;
-  var art=PAGEART[side], W=art.width, H=art.height, c=document.createElement('canvas'); c.width=W; c.height=H; var g=c.getContext('2d');
-  var ly=SHEETS.length?sheetLayer(num-1,side):art, lf=document.createElement('canvas'); lf.width=W; lf.height=H; var lg=lf.getContext('2d');
-  lg.drawImage(ly,0,0);
+  var art=PAGEART[side], W=art.width, H=art.height, sh=sheetOf(num-1), sg=side==='R'?1:-1;
+  var lf=sheetMask(sh,side), lg=lf.getContext('2d');
+  sheetMarks(lg,sh,side);
   /* текст ложится по рельефу: каждый столбик плоского текста растягивается между краями страницы */
   var ink=inkCanvas(pg,side,num), X0=side==='R'?X0R:X0L, left=side==='R'?LX0:LX0-LW, cw=1/RINK;
   lg.globalCompositeOperation='multiply';
@@ -409,9 +411,11 @@ function pageTex(pg,side,num){
     var X=X0+(i+.5)*cw, t=relY(side,X,0), b=relY(side,X,1);
     lg.drawImage(ink,i,0,1,ink.height,(X0+i*cw-left)*TEXT,(t-LY0)*TEXT,cw*TEXT+.6,(b-t)*TEXT);
   }
-  lg.globalCompositeOperation='destination-in'; lg.drawImage(ly,0,0); lg.globalCompositeOperation='source-over';
-  /* на столе: нарисованная страница выглядывает в вырезах листа, как следующие листы блока */
-  g.drawImage(art,0,0); g.drawImage(lf,0,0);
+  lg.globalCompositeOperation='destination-in'; lg.drawImage(sheetMask(sh,side),0,0); lg.globalCompositeOperation='source-over';
+  /* на столе: под листом следующая страница (чуть сдвинута и темнее), верхний лист бросает на неё мягкую тень */
+  var c=document.createElement('canvas'); c.width=W; c.height=H; var g=c.getContext('2d');
+  g.drawImage(art,sg*4,3); g.globalCompositeOperation='source-atop'; g.fillStyle='rgba(70,38,12,.22)'; g.fillRect(0,0,W,H); g.globalCompositeOperation='source-over';
+  g.save(); g.shadowColor='rgba(40,18,4,.45)'; g.shadowBlur=7; g.shadowOffsetX=sg*1.5; g.shadowOffsetY=1.5; g.drawImage(lf,0,0); g.restore();
   g.globalCompositeOperation='destination-in'; g.drawImage(art,0,0);
   pg._t={cv:c,leaf:lf,side:side};
   return c;
@@ -477,39 +481,28 @@ var STK=(function(){
   var cl=mk(58,142), cr=mk(1317,1372);
   function sm(x){x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x)}
   /* у верхнего и нижнего уголка ширина плавно возвращается к нарисованной, чтобы не было шва */
-  /* у верхнего и нижнего уголка ширина плавно, по длинной дуге, возвращается к нарисованной */
-  function wAt(y,w,w0){var e=Math.min(y,HP-y)/190; return lerp(w0,w,sm(e))}
-  var cg=document.createElement('canvas').getContext('2d');
-  function grads(g){
-    /* кожа крышки между ободком и блоком: светлее у ободка, темнее к страницам */
-    var bd=g.createLinearGradient(0,0,24,0); bd.addColorStop(0,'rgb(118,42,24)'); bd.addColorStop(1,'rgb(84,28,15)');
-    /* мягкая тень, которую блок страниц бросает на кожу (рисуется со сдвигом к краю блока) */
-    var sd=g.createLinearGradient(-14,0,0,0); sd.addColorStop(0,'rgba(18,5,1,0)'); sd.addColorStop(1,'rgba(18,5,1,.55)');
-    var sd2=g.createLinearGradient(0,0,14,0); sd2.addColorStop(0,'rgba(18,5,1,.55)'); sd2.addColorStop(1,'rgba(18,5,1,0)');
-    return {bd:bd,sd:sd,sd2:sd2};
+  /* толщина без изменения контура: блок всегда как на картине, меняется только густота листов на обрезе.
+     k<1 — видно немного широких листов, k>1 — много тонких (обрез повторяется сжатым, через раз зеркально, чтобы не было стыков).
+     У латунных уголков k плавно возвращается к 1, поэтому стыка с картиной нет */
+  function band(g,img,sy,sx0,sx1,dx0,k){
+    var W=sx1-sx0;
+    if(k<=1){ var w=W*k; g.drawImage(img,sx0,sy,w,1,dx0,sy-Y0p,W,1); return }
+    var tw=W/k, x=0, n=0;
+    while(x<W-.01){ var dw=Math.min(tw,W-x), sw=dw*k;
+      if(n%2){ g.save(); g.translate(dx0+x+dw,0); g.scale(-1,1); g.drawImage(img,sx0,sy,sw,1,0,sy-Y0p,dw,1); g.restore() }
+      else g.drawImage(img,sx0,sy,sw,1,dx0+x,sy-Y0p,dw,1);
+      x+=dw; n++ }
   }
   function draw(p){
     if(!img.complete||!img.naturalWidth) return;
-    var wl=lerp(44,63,p), wr=lerp(36,19,p), g=cl.getContext('2d'), W=cl.width, y, w, gap, st=1, G=grads(g);
-    g.clearRect(0,0,W,HP);
-    for(y=0;y<HP;y+=st){ w=wAt(y,wl,63); gap=W-w-24;
-      g.drawImage(img,58,Y0p+y,24,st,0,y,24,st);                              /* ободок переплёта как на картине */
-      if(gap>.3){
-        g.save(); g.translate(24,0); g.scale(Math.max(.01,gap/24),1); g.fillStyle=G.bd; g.fillRect(0,y,24,st); g.restore();
-        g.globalAlpha=.28; g.drawImage(img,70,Y0p+y,1,st,24,y,gap+.5,st); g.globalAlpha=1;   /* фактура кожи по высоте */
-        g.save(); g.translate(W-w,0); g.fillStyle=G.sd; g.fillRect(-Math.min(14,gap),y,Math.min(14,gap),st); g.restore();
-      }
-      var sw=lerp(59,63,sm((w-44)/19));                                        /* у уголков 1:1 с картиной, в середине без ободка */
-      g.drawImage(img,142-sw,Y0p+y,sw,st,W-w,y,w,st);                         /* полоски страниц */
-    }
-    g=cr.getContext('2d'); W=cr.width; g.clearRect(0,0,W,HP); G=grads(g);
-    for(y=0;y<HP;y+=st){ w=wAt(y,wr,26); gap=W-w-26;
-      g.drawImage(img,1317,Y0p+y,29,st,0,y,w+3,st);
-      g.drawImage(img,1346,Y0p+y,26,st,w+3,y,26,st);
-      if(26-w>.3){ var x0=w+29, gw=26-w;
-        g.drawImage(img,1372-gw,Y0p+y,gw,st,x0,y,W-x0,st);
-        g.save(); g.translate(x0,0); g.fillStyle=G.sd2; g.fillRect(0,y,Math.min(14,gw*1.5),st); g.restore();
-      }
+    var kl=Math.pow(2.2,lerp(-1,1,p)), kr=Math.pow(2.2,lerp(1,-1,p)), y, e;
+    var g=cl.getContext('2d'); g.clearRect(0,0,cl.width,HP);
+    var h=cr.getContext('2d'); h.clearRect(0,0,cr.width,HP);
+    for(y=0;y<HP;y++){ e=sm(Math.min(y,HP-y)/190);
+      g.drawImage(img,58,Y0p+y,84,1,0,y,84,1);
+      band(g,img,Y0p+y,80,138,22,lerp(1,kl,e));
+      h.drawImage(img,1317,Y0p+y,55,1,0,y,55,1);
+      band(h,img,Y0p+y,1321,1356,4,lerp(1,kr,e));
     }
   }
   function anim(){ var d=goal-cur; cur+=d*.06; if(Math.abs(d)<.002) cur=goal; draw(cur); raf=cur!==goal?requestAnimationFrame(anim):0 }
@@ -896,11 +889,11 @@ function flipSheet(o,cb){
         sSm+=(spd-sSm)*.35; RUSTLE.set(landed?0:Math.max(grabbing?1.5:0,sSm/55)) }
       if(grabbing){
         pt=proj(dir,PAPER.p[gn*3],PAPER.p[gn*3+1],PAPER.p[gn*3+2]);
-        var se=Math.sin(Math.PI*Math.max(0,u2)); sc=pt.k; rot=P.wr*se; lift=(pt.k-1)*110+1.5*se;
+        var se=Math.sin(Math.PI*Math.max(0,u2)); sc=pt.k; rot=0; lift=(pt.k-1)*110+1.5*se;
         poseSet(H,handPhase('pull',u2));
       } else if(!handOff){
         var u3=Math.min(1,(now-released)/TOUT), e3=EASE.slow(u3); pt=arc(relPt,away(relPt,620),e3,-P.side*30);
-        sc=relPt.k+.06*e3; rot=-P.side*7*e3; lift=(relPt.k-1)*110+12*e3;
+        sc=relPt.k+.06*e3; rot=0; lift=(relPt.k-1)*110+12*e3;
         poseSet(H,handPhase('out',u3));
         if(u3>=1){handOff=true; showHand(H,false)}
       }
@@ -1329,9 +1322,7 @@ if(q.get('demo')!=='0'){
   addGift('Витя','Роза ×3');
 }
 
-var sheetsReady=Promise.all(SHEETSRC.map(function(src,i){return new Promise(function(res){var im=new Image(); im.onload=function(){
-    var fl=document.createElement('canvas'); fl.width=im.width; fl.height=im.height; var fg=fl.getContext('2d'); fg.translate(0,im.height); fg.scale(1,-1); fg.drawImage(im,0,0);
-    SHEETS[i]=[im,fl]; res()}; im.onerror=res; im.src=src})})).then(function(){SHEETS=SHEETS.filter(Boolean)});
+var sheetsReady=Promise.resolve();
 var libReady=Promise.all(['L','R'].map(function(k){return new Promise(function(res){var im=new Image(); im.onload=function(){PAGEART[k]=im; res()}; im.onerror=res; im.src=PAGESRC[k]})}));
 Promise.all([libReady,sheetsReady,Promise.race([document.fonts.load('15px Lora'),new Promise(function(r){setTimeout(r,2500)})])]).then(function(){
   setStory(STORY); requestAnimationFrame(function(t){last=t; tick(t)});
