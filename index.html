@@ -76,15 +76,21 @@ body.haslens .lens{display:block}
 .handu{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;display:none;z-index:12}
 #gl{z-index:10}
 .hand{position:absolute;left:0;top:0;width:0;height:0}
-#fsb{position:fixed;top:10px;right:10px;z-index:200;width:42px;height:42px;border-radius:10px;border:1px solid #8d6420;
+#fsb,#gear{position:fixed;top:10px;right:10px;z-index:200;width:42px;height:42px;border-radius:10px;border:1px solid #8d6420;
   background:rgba(30,18,8,.65);color:#f1deb0;font:20px/1 Lora,Georgia,serif;display:flex;align-items:center;justify-content:center;transition:opacity .6s}
 #fsb.idle{opacity:0}
+#ctl{display:none}
+#ctl.open{display:flex}
 body.fs #fsb{display:none}
+#gear{right:58px}
+body.fs #gear{right:10px}
+#gear.idle{opacity:0}
+#gear.on{background:#8d6420;color:#fff3d0}
 
 #ctl{position:fixed;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:100}
 #ctl button{font:14px Lora,Georgia,serif;color:#f1deb0;background:rgba(30,18,8,.75);border:1px solid #8d6420;border-radius:8px;padding:8px 14px}
 #ctl button.on{background:#8d6420;color:#fff3d0;box-shadow:0 0 10px rgba(255,190,90,.6)}
-body.clean #ctl{display:none}
+
 </style>
 </head>
 <body>
@@ -127,6 +133,7 @@ body.clean #ctl{display:none}
 </div>
 
 <button id="fsb" aria-label="На весь экран">⛶</button>
+<button id="gear" aria-label="Настройки">⚙</button>
 <div id="ctl">
   <button id="bPrev">◀</button>
   <button id="bPlay">❚❚</button>
@@ -1665,7 +1672,9 @@ var fl=1, flT=0;
 
 /* кнопка «на весь экран»: прячется в полноэкранном режиме и сама гаснет, если её не трогать */
 var fsb=document.getElementById('fsb'), fsT=0;
-function fsIdle(){fsb.classList.remove('idle'); clearTimeout(fsT); fsT=setTimeout(function(){fsb.classList.add('idle')},3500)}
+var gearb=document.getElementById('gear'), ctlp=document.getElementById('ctl');
+function fsIdle(){fsb.classList.remove('idle'); gearb.classList.remove('idle'); clearTimeout(fsT); fsT=setTimeout(function(){fsb.classList.add('idle'); if(!ctlp.classList.contains('open')) gearb.classList.add('idle')},3500)}
+gearb.onclick=function(){var o=ctlp.classList.toggle('open'); gearb.classList.toggle('on',o)};
 fsb.onclick=function(){
   var d=document.documentElement, rq=d.requestFullscreen||d.webkitRequestFullscreen;
   if(document.fullscreenElement||document.webkitFullscreenElement){(document.exitFullscreen||document.webkitExitFullscreen).call(document)}
