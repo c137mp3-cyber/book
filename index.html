@@ -183,13 +183,12 @@ var HANDS={
  lens:{img:'assets/hand_lens.webp',W:520,H:1075,sc:.15,xl:3,xr:505,sk:0,taper:1,
    stops:['#3f1d2d','#783f41','#4d2129','#5d2d34','#8b4c51','#673238','#461f27','#462227','#462a40']},
  pinch:{img:'assets/hand_pinch2.webp',W:560,H:1285,px:235,py:48,ba:98,sc:.375,noext:1,s:.97,v:.9,cb:.55},
- palm:{img:'assets/hand_palm.webp',W:520,H:677,px:55,py:45,ba:68,sc:.36,xl:290,xr:516,sk:.36,s:.9,v:.55,cb:0,
-   stops:['#350c1e','#350c1e','#5e1e2f','#541a2c','#903742','#79293a','#471224','#571427','#571427']},
- two:{img:'assets/hand_two.webp',W:520,H:668,px:48,py:18,ba:70,sc:.36,xl:280,xr:515,sk:.36,s:.97,v:.45,cb:.1,
-   stops:['#4c1421','#431321','#501827','#471322','#7e2e3a','#66232f','#531927','#571826','#571826']}
+ palm:{img:'assets/hand_palm2.webp',W:560,H:1087,px:30,py:12,ba:73.5,sc:.41,noext:1,s:.9,v:.55,cb:0},
+ two:{img:'assets/hand_two2.webp',W:560,H:998,px:185,py:15,ba:86,sc:.41,noext:1,s:.97,v:.45,cb:.1}
 };
 function buildHand(h,box,ext){
   var im=document.createElement('img'); im.src=h.img; im.alt=''; im.style.width=h.W+'px'; im.style.height=h.H+'px';
+  if(h.noext){im.style.webkitMaskImage=im.style.maskImage='linear-gradient(180deg,#000 0,#000 68%,transparent 97%)'}
   box.appendChild(im);
   if(h.noext) {box.style.width=h.W+'px'; box.style.height=h.H+'px'; return}
   var e=document.createElement('div'); e.className='ext';
