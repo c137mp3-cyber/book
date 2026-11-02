@@ -203,7 +203,7 @@ function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 function lerp(a,b,t){return a+(b-a)*t}
 
 /* ---------- руки ---------- */
-var OLDH=!(q.get('newhands')==='1'||q.get('vid')==='1');   /* по умолчанию — прежняя рука и прежнее слипание; новые — ?newhands=1 */
+var OLDH=!(q.get('newhands')==='1'||q.get('vid')==='1');   /* обычное листание — прежняя рука (всегда над листом, только правая); слипание — с отслоением. ?newhands=1 — слои пальцев и левая рука в обычном листании */
 var HANDS={
  lens:{img:'assets/hand_lens.webp',W:520,H:1075,sc:.15,xl:3,xr:505,sk:0,taper:1,
    stops:['#3f1d2d','#783f41','#4d2129','#5d2d34','#8b4c51','#673238','#461f27','#462227','#462a40']},
@@ -212,7 +212,7 @@ var HANDS={
  two:{img:'assets/hand_two2.webp',W:560,H:998,px:185,py:15,ba:86,sc:.41,noext:1,s:.97,v:.45,cb:.1,vr:[.35,.75]},
  vidR:{live:1,vid:1,W:352,H:962,px:191,py:213,ba:87,sc:+(new URLSearchParams(location.search).get('vsc')||.62),noext:1,s:.97,v:.9,cb:0,vr:[.5,.9],
    fin:[125,126,127,128,129,130,131,132,133,140], fout:[140,86,87,88,89,90,91,92,93,94,95,96,97,98,99]},
- pinchL:{live:1,W:560,H:1360,px:389,py:189,pv:[330.5,321.3],ba:101.1,sc:.375,noext:1,mirror:1,s:OLDH?.97:.9,v:OLDH?.6:.92,cb:0,vr:OLDH?[.6,.6]:[.8,.9]},
+ pinchL:{live:1,W:560,H:1360,px:389,py:189,pv:[330.5,321.3],ba:101.1,sc:.375,noext:1,mirror:1,s:.9,v:.92,cb:0,vr:[.8,.9]},
  quillw:{img:'assets/hq.webp',W:538,H:1318,px:8,py:396,ba:79,sc:.27,noext:1},
  quill:{img:'assets/hand_quill2.webp',W:560,H:1166,px:100,py:178,ba:72,sc:.4,noext:1}
 };
@@ -225,7 +225,7 @@ function liveImg(h,src){var im=document.createElement('img'); im.src=src; im.alt
 function buildLive(h,box){
   /* вся рука кроме большого пальца живёт в слое, который в момент хвата уходит ПОД летящий лист (указательный под страницей),
      большой палец — отдельный слой над листом */
-  if(!OLDH||h.vid){
+  {
   var lfx=document.createElement('div'); lfx.className='handu low'; var lw=document.createElement('div'); lw.className='hand'; lfx.appendChild(lw);
   var lin=document.createElement('div'); lin.className='hin'; lin.style.left=(-h.px*h.sc)+'px'; lin.style.top=(-h.py*h.sc)+'px'; lin.style.transform='scale('+h.sc+')';
   lin.style.width=h.W+'px'; lin.style.height=h.H+'px'; lw.appendChild(lin); bookwrap.insertBefore(lfx,glc); h.lfx=lfx; h.lel=lw;
@@ -248,7 +248,6 @@ function buildLive(h,box){
   var th=document.createElement('div'); th.style.cssText='position:absolute;left:0;top:0;width:'+h.W+'px;height:'+h.H+'px;transform-origin:'+h.pv[0]+'px '+h.pv[1]+'px';
   th.appendChild(liveImg(h,'assets/hr_thumb.webp')); uin.appendChild(th);
   uw.appendChild(uin); bookwrap.appendChild(ufx); h.ufx=ufx; h.uel=uw; h.thumb=th; h.open=-1; poseSet(h,1);
-  if(OLDH){box.style.width=h.W+'px'; box.style.height=h.H+'px'}
 }
 /* o: 0 — щипок сжат, 1 — большой палец отведён */
 function poseSet(h,o){
@@ -1052,7 +1051,7 @@ function flipSheet(o,cb){
       poseSet(H,handPhase('in',t/TIN));
     } else {
       var u2=(t-TIN)/P.dur, grabbing=u2<1;
-      if(!touched){touched=true; handUnder(H,true); if(RUSTLE) RUSTLE.touch(1)}
+      if(!touched){touched=true; if(!OLDH) handUnder(H,true); if(RUSTLE) RUSTLE.touch(1)}
       if(grabbing) setGrab(G,ez(Math.max(0,u2)),P);
       else if(!released){released=now; handUnder(H,false); if(RUSTLE) RUSTLE.touch(.6); var g0=G.main; relPt=proj(dir,PAPER.p[g0*3],PAPER.p[g0*3+1],PAPER.p[g0*3+2])}
       if(!blend){
@@ -1100,7 +1099,7 @@ function flipTo(idx,force){
       onLand:function(){fillPage(pL,S.pages[2*idx],'L',2*idx+1); fillPage(pR,S.pages[2*idx+1],'R',2*idx+2); S.spread=idx; setStack(idx,true); buildSeq(); refreshLens()}},finish);
     return;
   }
-  (OLDH?flipStuckOld:flipStuck)(cur,finish);
+  (q.get('oldstuck')==='1'?flipStuckOld:flipStuck)(cur,finish);
 }
 /* задний лист сдвигаем чуть «под» передний по общей нормали, чтобы не мерцали */
 function offsetBehind(pp,d){
