@@ -209,6 +209,8 @@ var HANDS={
  pinch:{live:1,W:560,H:1360,px:171,py:189,pv:[229.5,321.3],ba:78.9,sc:.375,noext:1,s:.97,v:.9,cb:.55,vr:[.55,.95]},
  palm:{img:'assets/hand_palm2.webp',W:560,H:1087,px:30,py:12,ba:73.5,sc:.41,noext:1,s:.9,v:.55,cb:0,vr:[.4,.8]},
  two:{img:'assets/hand_two2.webp',W:560,H:998,px:185,py:15,ba:86,sc:.41,noext:1,s:.97,v:.45,cb:.1,vr:[.35,.75]},
+ vidR:{live:1,vid:1,W:352,H:962,px:191,py:213,ba:87,sc:+(new URLSearchParams(location.search).get('vsc')||.62),noext:1,s:.97,v:.9,cb:0,vr:[.5,.9],
+   fin:[125,126,127,128,129,130,131,132,133,140], fout:[140,86,87,88,89,90,91,92,93,94,95,96,97,98,99]},
  pinchL:{live:1,W:560,H:1360,px:389,py:189,pv:[330.5,321.3],ba:101.1,sc:.375,noext:1,mirror:1,s:.9,v:.92,cb:0,vr:[.8,.9]},
  quillw:{img:'assets/hq.webp',W:538,H:1318,px:8,py:396,ba:79,sc:.27,noext:1},
  quill:{img:'assets/hand_quill2.webp',W:560,H:1166,px:100,py:178,ba:72,sc:.4,noext:1}
@@ -226,6 +228,13 @@ function buildLive(h,box){
   var lin=document.createElement('div'); lin.className='hin'; lin.style.left=(-h.px*h.sc)+'px'; lin.style.top=(-h.py*h.sc)+'px'; lin.style.transform='scale('+h.sc+')';
   lin.style.width=h.W+'px'; lin.style.height=h.H+'px'; lw.appendChild(lin); bookwrap.insertBefore(lfx,glc); h.lfx=lfx; h.lel=lw;
   box=lin;
+  if(h.vid){   /* рука из видео: набор кадров, поза o выбирает кадр (между кадрами — плавный переход) */
+    h.vf={}; h.vcur=-1; h.open=-1;
+    h.fin.concat(h.fout).forEach(function(n){ if(h.vf[n]) return;
+      var im=document.createElement('img'); im.src='assets/vh/v'+('00'+n).slice(-3)+'.webp'; im.alt=''; im.style.cssText='position:absolute;left:0;top:0;width:'+h.W+'px;height:'+h.H+'px;opacity:0';
+      im.style.webkitMaskImage=im.style.maskImage='linear-gradient(180deg,#000 0,#000 66%,transparent 94%)'; box.appendChild(im); h.vf[n]=im});
+    h.vshow=[]; poseSet(h,0); return;
+  }
   h.base=liveImg(h,'assets/hr_base.webp'); box.appendChild(h.base);
   /* раскрытые позы (свои у левой и правой руки): широко → ближе → щипок */
   var pre=h.mirror?'hl':'hr'; h.op0=liveImg(h,'assets/'+pre+'_open1.webp'); h.op1=liveImg(h,'assets/'+pre+'_open0.webp');
@@ -239,6 +248,15 @@ function buildLive(h,box){
 }
 /* o: 0 — щипок сжат, 1 — большой палец отведён */
 function poseSet(h,o){
+  if(h.vid){
+    o=Math.max(0,Math.min(1,o)); if(h.po==null) h.po=o;
+    if(o<h.po-.001) h.vm='in'; else if(o>h.po+.001) h.vm='out'; if(!h.vm) h.vm='out'; h.po=o;
+    var L=h.vm==='in'?h.fin:h.fout, x=(h.vm==='in'?1-o:o)*(L.length-1), i=Math.floor(x), f=x-i, a=L[i], b=L[Math.min(L.length-1,i+1)], k;
+    var want={}; want[a]=1-f; if(b!==a) want[b]=(want[b]||0)+f;
+    for(k in h.vf){ h.vf[k].style.opacity=want[k]!=null?Math.min(1,want[k]*1.0).toFixed(3):0 }
+    if(f>0&&f<1&&a!==b){ h.vf[a].style.opacity=1 }   /* нижний кадр держим целиком, верхний проявляем поверх — без просвета */
+    return;
+  }
   if(!h.live||!h.thumb) return; o=Math.max(0,Math.min(1,o)); if(Math.abs(o-h.open)<.002) return; h.open=o;
   function ss(e0,e1,v){v=Math.max(0,Math.min(1,(v-e0)/(e1-e0))); return v*v*(3-2*v)}
   /* новая поза сначала проявляется целиком поверх, и только потом гаснет старая — без полупрозрачных пальцев */
@@ -256,7 +274,7 @@ function handPhase(kind,x){
 }
 function showHand(h,on){h.fx.style.display=on?'block':'none'; if(h.ufx) h.ufx.style.display=on?'block':'none'; if(h.lfx){h.lfx.style.display=on?'block':'none'; if(on) handUnder(h,false)}}
 /* under=true: рука под листом (хват), false: над листом (подлёт и уход) */
-function handUnder(h,u){ h.under=u; if(h.lfx) h.lfx.style.zIndex=u?9:11 }
+function handUnder(h,u){ h.under=u; if(h.lfx) h.lfx.style.zIndex=(u&&!h.vid)?9:11 }
 function buildHand(h,box,ext){
   if(h.live){buildLive(h,box); return}
   var im=document.createElement('img'); im.src=h.img; im.alt=''; im.style.width=h.W+'px'; im.style.height=h.H+'px';
@@ -276,7 +294,7 @@ if(LENS){
   buildHand(h0,box0,1500);
   box0.style.left=(-h0.W*h0.sc/2)+'px'; box0.style.top='0px'; box0.style.transform='scale('+h0.sc+')';
 }
-['pinch','palm','two','pinchL','quillw'].forEach(function(n){
+['pinch','palm','two','pinchL','quillw','vidR'].forEach(function(n){
   var h=HANDS[n], fx=document.createElement('div'), w=document.createElement('div'); fx.className='handfx'; w.className='hand'; w.id='hand_'+n; h.el=w; h.fx=fx; fx.appendChild(w);
   var inner=document.createElement('div'); inner.className='hin';
   buildHand(h,inner,900);
@@ -1073,7 +1091,7 @@ function flipTo(idx,force){
   var canStuck=idx===cur+1&&cur+2<n, stuck=canStuck&&(!!S.armStuck||(!force&&Math.random()<(+(q.get('stuck')||.08))));
   if(stuck&&S.armStuck){S.armStuck=false; syncStuck()}
   if(!stuck){
-    flipSheet({dir:1,pose:force||(Math.random()<.25?'pinchL':'pinch'),F:texOf(2*cur+1,'R'),B:texOf(2*idx,'L'),
+    flipSheet({dir:1,pose:force||(Math.random()<.25?'pinchL':(q.get('vid')==='1'?'vidR':'pinch')),F:texOf(2*cur+1,'R'),B:texOf(2*idx,'L'),
       onStart:function(){fillPage(pR,S.pages[2*idx+1],'R',2*idx+2)},
       onLand:function(){fillPage(pL,S.pages[2*idx],'L',2*idx+1); fillPage(pR,S.pages[2*idx+1],'R',2*idx+2); S.spread=idx; setStack(idx,true); buildSeq(); refreshLens()}},finish);
     return;
