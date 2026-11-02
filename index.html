@@ -38,6 +38,7 @@ html,body{height:100%;background:#0a0604;overflow:hidden;font-family:Lora,Georgi
 .pg.R .text{left:var(--txR);top:var(--tyy)}
 .pg.L .text{left:var(--txL);top:var(--tyy)}
 .line{position:absolute;left:0;width:100%;height:19.5px;border-radius:3px;color:transparent}
+.hl{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
 .line.on{background:linear-gradient(90deg,rgba(255,196,90,0),rgba(255,196,90,.34) 6%,rgba(255,196,90,.34) 94%,rgba(255,196,90,0))}
 #gl{position:absolute;pointer-events:none;display:block}
 
@@ -137,9 +138,33 @@ body.clean #ctl{display:none}
 /* ---------- геометрия ---------- */
 var Q=1438/540;                            /* пикселей картины сцены на единицу сцены */
 var BX=0, BY=290, BW=540, BH=460;
-var PW=200, PH=345, X0L=58, X0R=281, Y0=40;
+var PW=192, PH=330, X0L=66, X0R=284, Y0=40;
 var LX0=718/Q, LY0=817/Q-BY, LW=610/Q, LHT=1057/Q; /* лист = нарисованная страница, вырезанная из картины */
-var TW=192, TLL=4, TLR=4, TT=4, LH=19.5, PERP=16;
+var TW=184, TLL=4, TLR=4, TT=4, LH=17.5, PERP=17, FS=12.5;
+/* рельеф страниц, снятый с картины: верхний и нижний край каждой страницы по x (координаты книги) */
+var RELX={L:[52.6,61.6,70.6,79.6,88.6,97.6,106.6,115.7,124.7,133.7,142.7,151.7,160.7,169.7,178.7,187.8,196.8,205.8,214.8,223.8,232.8,241.8,250.8,259.9,268.9],
+          R:[269.6,278.6,288.0,297.4,306.8,316.2,325.6,335.0,344.4,353.4,362.8,372.1,381.5,390.9,400.3,409.7,419.1,428.1,437.5,446.9,456.3,465.6,475.0,484.4,493.8]};
+var RELT={L:[43.8,42.8,40.4,40.1,40.1,39.8,39.1,37.9,34.9,32.5,30.8,29.1,27.8,27.0,26.3,24.5,23.3,22.9,23.2,24.7,26.1,28.6,32.8,39.3,42.9],
+          R:[40.5,37.9,32.5,28.4,25.2,23.1,22.5,22.5,23.9,25.4,26.0,27.0,28.7,30.7,32.8,36.3,37.8,38.2,38.2,38.2,38.2,37.5,36.9,40.0,42.2]};
+var RELB={L:[382.3,385.3,388,389,389,389,389,388.5,388.0,386.5,386.7,387.6,387.0,385.4,383.9,382.8,382.2,381.9,381.8,382.1,384.0,388,392,394,396],
+          R:[397.3,395.2,392.7,389.0,385.9,383.0,382.3,382.5,382.8,383.2,384.5,386.2,388.0,389.0,389.4,389.6,389.2,389.0,390.5,391.5,392,392,392,392,392]};
+var MT=17, MB=17;   /* отступ текста от верхнего и нижнего края страницы */
+/* края сглажены в плавную дугу (парабола по точкам под текстом), чтобы строки не повторяли каждую неровность */
+var RELF={};
+function fitQ(xs,ys){var n=xs.length,S=[0,0,0,0,0],T=[0,0,0],i,x,m=0;
+  for(i=0;i<n;i++){m+=ys[i]/n}
+  for(i=0;i<n;i++){x=(xs[i]-270)/100;var p=1;for(var k=0;k<5;k++){S[k]+=p;if(k<3)T[k]+=ys[i]*p;p*=x}}
+  var A=[[S[0],S[1],S[2]],[S[1],S[2],S[3]],[S[2],S[3],S[4]]],B=T.slice();
+  for(var c=0;c<3;c++){for(var r=c+1;r<3;r++){var f=A[r][c]/A[c][c];for(var k2=c;k2<3;k2++)A[r][k2]-=f*A[c][k2];B[r]-=f*B[c]}}
+  var z=[0,0,0];for(var r2=2;r2>=0;r2--){var v=B[r2];for(var k3=r2+1;k3<3;k3++)v-=A[r2][k3]*z[k3];z[r2]=v/A[r2][r2]}
+  return {c:z,m:m}}
+['L','R'].forEach(function(sd){var X0=sd==='R'?X0R:X0L, xs=[],t=[],b=[];
+  RELX[sd].forEach(function(x,i){if(x>=X0-8&&x<=X0+PW+8){xs.push(x);t.push(RELT[sd][i]);b.push(RELB[sd][i])}});
+  RELF[sd]={t:fitQ(xs,t),b:fitQ(xs,b)}});
+var RELK=.7;   /* насколько сильно текст повторяет изгиб */
+function relAt(arr,side,x){var f=RELF[side][arr===RELT?'t':'b'], u=(x-270)/100, y=f.c[0]+f.c[1]*u+f.c[2]*u*u; return f.m+(y-f.m)*RELK}
+/* где на странице оказывается точка плоского текста (x книги, v 0..1 по высоте текстового поля) */
+function relY(side,x,v){var t=relAt(RELT,side,x)+MT, b=relAt(RELB,side,x)-MB; return t+(b-t)*v}
 var READ=0.13;
 var Z=2, RCL=56, HCX=73, HCY=70;
 var ARMX=640, ARMY=1130;
@@ -217,7 +242,7 @@ var S={pages:[],spread:0,seq:[],cur:0,el:0,playing:true,flipping:false,hold:0,ac
 /* ---------- текст «чернилами» ---------- */
 var meas=document.createElement('canvas').getContext('2d');
 function paginate(text){
-  meas.font='14px Lora, Georgia, serif';
+  meas.font=FS+'px Lora, Georgia, serif';
   var paras=String(text).split(/\n+/).map(function(s){return s.trim()}).filter(Boolean), lines=[];
   paras.forEach(function(p){
     var words=p.split(/\s+/), cur='  ', first=true;
@@ -249,11 +274,11 @@ var INKC=['#2c190a','#35200e','#2a1709','#3b2511'];
 function inkCanvas(pg,side,num){
   if(pg._c&&pg._c.side===side) return pg._c.cv;
   var c=document.createElement('canvas'); c.width=PW*RINK; c.height=PH*RINK; var g=c.getContext('2d');
-  g.scale(RINK,RINK); g.font='14px Lora, Georgia, serif'; g.textBaseline='alphabetic';
+  g.scale(RINK,RINK); g.font=FS+'px Lora, Georgia, serif'; g.textBaseline='alphabetic';
   g.shadowColor='rgba(70,35,8,.38)'; g.shadowBlur=1.1;
   var x0=side==='L'?TLL:TLR;
   pg.lines.forEach(function(l,i){
-    var y=TT+i*LH+14, x=x0;
+    var y=TT+i*LH+12.6, x=x0;
     l.text.split(/(\s+)/).forEach(function(tok){
       if(!tok) return;
       var w=g.measureText(tok).width;
@@ -264,7 +289,7 @@ function inkCanvas(pg,side,num){
       x+=w;
     });
   });
-  g.shadowBlur=0; g.globalAlpha=.6; g.fillStyle='#5a3a1a'; g.font='italic 12px Lora, Georgia, serif'; g.textAlign='center';
+  g.shadowBlur=0; g.globalAlpha=.6; g.fillStyle='#5a3a1a'; g.font='italic 11px Lora, Georgia, serif'; g.textAlign='center';
   if(!pg.blank) g.fillText(String(num),PW/2,PH-9); g.globalAlpha=1;
   g.setTransform(1,0,0,1,0,0); g.globalCompositeOperation='destination-out';
   g.fillStyle=g.createPattern(NOISE,'repeat'); g.fillRect(0,0,c.width,c.height);
@@ -277,9 +302,13 @@ function pageTex(pg,side,num){
   if(pg._t&&pg._t.side===side) return pg._t.cv;
   var art=PAGEART[side], c=document.createElement('canvas'); c.width=art.width; c.height=art.height; var g=c.getContext('2d');
   g.drawImage(art,0,0);
-  var ox=side==='R'?X0R-LX0:X0L-(LX0-LW);
+  /* текст ложится по рельефу: каждый столбик плоского текста растягивается между краями страницы */
+  var ink=inkCanvas(pg,side,num), X0=side==='R'?X0R:X0L, left=side==='R'?LX0:LX0-LW, cw=1/RINK;
   g.globalCompositeOperation='multiply';
-  g.drawImage(inkCanvas(pg,side,num),ox*TEXT,(Y0-LY0)*TEXT,PW*TEXT,PH*TEXT);
+  for(var i=0;i<ink.width;i++){
+    var X=X0+(i+.5)*cw, t=relY(side,X,0), b=relY(side,X,1);
+    g.drawImage(ink,i,0,1,ink.height,(X0+i*cw-left)*TEXT,(t-LY0)*TEXT,cw*TEXT+.6,(b-t)*TEXT);
+  }
   g.globalCompositeOperation='destination-in'; g.drawImage(art,0,0);
   pg._t={cv:c,side:side};
   return c;
@@ -313,9 +342,7 @@ function warpPage(pg,side,num){
 function fillPage(el,pg,side,num){
   el.innerHTML='';
   el.appendChild(pageTex(pg,side,num));
-  var t=document.createElement('div'); t.className='text';
-  pg.lines.forEach(function(l,i){var d=document.createElement('div'); d.className='line'; d.style.top=(TT+i*LH)+'px'; d.textContent=l.text; t.appendChild(d)});
-  el.appendChild(t);
+  var h=document.createElement('canvas'); h.className='hl'; h.width=Math.round(LW*2); h.height=Math.round(LHT*2); el.appendChild(h);
 }
 function renderSpread(i){
   fillPage(pL,S.pages[2*i],'L',2*i+1);
@@ -347,13 +374,18 @@ function setStack(i,anim){
 }
 
 function markActive(){
-  [bookwrap,S.clone].forEach(function(root){
-    if(!root) return;
-    root.querySelectorAll('.line.on').forEach(function(e){e.classList.remove('on')});
-    if(S.act){
-      var pg=root.querySelector('.pg.'+S.act.side);
-      if(pg){var l=pg.querySelectorAll('.line')[S.act.i]; if(l) l.classList.add('on')}
-    }
+  ['L','R'].forEach(function(side){
+    var el=side==='L'?pL:pR, h=el.querySelector('.hl'); if(!h) return;
+    var g=h.getContext('2d'); g.setTransform(2,0,0,2,0,0); g.clearRect(0,0,LW,LHT);
+    if(!S.act||S.act.side!==side) return;
+    var pg=S.pages[2*S.spread+(side==='L'?0:1)], ln=pg&&pg.lines[S.act.i]; if(!ln) return;
+    var X0=side==='R'?X0R:X0L, left=side==='R'?LX0:LX0-LW, xa=X0+TLL-5, xb=X0+TLL+Math.max(ln.w,40)+5;
+    var v1=(TT+S.act.i*LH-1)/PH, v2=(TT+(S.act.i+1)*LH+1)/PH, x, path=[];
+    for(x=xa;x<=xb;x+=3) path.push([x-left,relY(side,x,v1)-LY0]);
+    for(x=xb;x>=xa;x-=3) path.push([x-left,relY(side,x,v2)-LY0]);
+    var gr=g.createLinearGradient(xa-left,0,xb-left,0);
+    gr.addColorStop(0,'rgba(255,196,90,0)'); gr.addColorStop(.06,'rgba(255,196,90,.32)'); gr.addColorStop(.94,'rgba(255,196,90,.32)'); gr.addColorStop(1,'rgba(255,196,90,0)');
+    g.fillStyle=gr; g.beginPath(); path.forEach(function(p,i){i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1])}); g.closePath(); g.fill();
   });
 }
 function refreshLens(){
@@ -671,7 +703,7 @@ document.addEventListener('fullscreenchange',fsSync); document.addEventListener(
 addEventListener('pointerdown',fsIdle); fsIdle();
 
 /* ---------- таблички: чёткий текст с наклоном стены ---------- */
-var TILT=+(q.get('tilt')||26), ROT=+(q.get('rot')||0);   /* наклон стены назад (градусы) и поворот в плоскости */
+var TILT=+(q.get('tilt')||-22), ROT=+(q.get('rot')||0);   /* наклон стены назад (градусы) и поворот в плоскости */
 function Plaque(id,max,fs,rot){
   var el=document.getElementById(id), W=parseFloat(getComputedStyle(el).width), H=parseFloat(getComputedStyle(el).height), R=3;
   el.width=W*R; el.height=H*R;
@@ -696,7 +728,8 @@ function Plaque(id,max,fs,rot){
     g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,el.width,el.height);
     var th=TILT*Math.PI/180, D=H*4.2*R, c=Math.cos(th), s=Math.sin(th), Hp=F.height, cx=F.width/2;
     var hOut=Hp*c*D/(D+Hp*s), oy=(Hp-hOut)/2;
-    g.translate(cx,Hp/2); g.rotate((rot+ROT)*Math.PI/180); g.translate(-cx,-Hp/2);
+    var km=Math.max(1,D/(D+Hp*s), hOut/Hp);
+    g.translate(cx,Hp/2); g.rotate((rot+ROT)*Math.PI/180); g.scale(1/km,1/km); g.translate(-cx,-Hp/2);
     for(var yo=0;yo<hOut;yo+=1){
       var u=yo*D/(c*D-yo*s), k=D/(D+u*s), sy=Hp-u;          /* yo считаем от низа */
       if(sy<0) break;
@@ -711,7 +744,7 @@ function Plaque(id,max,fs,rot){
     if(!anim){anim=true; requestAnimationFrame(render)}
   }};
 }
-var PCHAT=Plaque('chatPlaque',3,12.5,.9), PGIFT=Plaque('giftsPlaque',2,12.5,0);
+var PCHAT=Plaque('chatPlaque',3,14.5,.9), PGIFT=Plaque('giftsPlaque',2,15,0);
 function addChat(name,text){ PCHAT.add(String(name).slice(0,24),': ',String(text).slice(0,90)) }
 function addGift(name,gift){
   PGIFT.add(String(name).slice(0,20),' · ',String(gift).slice(0,24));
