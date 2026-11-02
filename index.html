@@ -47,7 +47,7 @@ html,body{height:100%;background:#0a0604;overflow:hidden;font-family:Lora,Georgi
 #glow{position:absolute;left:-162px;top:-80px;width:420px;height:420px;pointer-events:none;mix-blend-mode:screen;
   background:radial-gradient(circle,rgba(255,170,70,.55),rgba(255,140,40,.18) 40%,transparent 65%);
   opacity:calc(.5 + .5*var(--f))}
-#flamecv{position:absolute;left:18px;top:46px;width:60px;height:120px;pointer-events:none}
+#flamecv,#flamegl{position:absolute;left:18px;top:46px;width:60px;height:120px;pointer-events:none}
 #quill{position:absolute;left:468px;top:121px;width:64px;height:110px;z-index:9;transform-origin:6px 107px;transform:rotate(-6deg);
   clip-path:inset(0 0 9px 0);filter:drop-shadow(5px 6px 4px rgba(20,8,0,.5))}
 
@@ -547,7 +547,7 @@ function renderSpread(i){
   setTimeout(function(){prep(i)},400);
 }
 
-(function(){var e=document.getElementById('gut'); e.style.left=(LX0-15)+'px'; e.style.top=(LY0+130/Q)+'px'; e.style.height=(880/Q)+'px'})();
+(function(){var e=document.getElementById('gut'); e.style.left=(LX0-15)+'px'; e.style.top=(LY0+70/Q)+'px'; e.style.height=(960/Q)+'px'})();
 function spreadsCount(){return Math.max(1,Math.ceil(S.pages.length/2))}
 /* толщина книги: блок страниц слева растёт, справа тает по мере чтения; полоски страниц вырезаны из самой картины */
 /* ---------- блок страниц кодом ----------
@@ -567,10 +567,10 @@ var STK=(function(){
   function build(sd){
     var E=edgesOf(sd), W=E.W, H=E.H, sg=sd==='R'?1:-1, spx=sd==='R'?0:W, i, x, y, st=6;
     function sm(a,w1,w2){return avg(med(a,w1),w2)}
-    var xo=sm(E.xo,110,70), yt=sm(E.yt,50,30), yb=sm(E.yb,50,30), T=[], O=[], B=[];
+    var xo=sm(E.xo,110,70), yt=sm(E.yt,50,30), yb=sm(E.yb,50,30), ytr=med(E.yt,4), ybr=med(E.yb,4), T=[], O=[], B=[];
     /* у самого корешка кривая страницы идёт круто вниз: берём её как есть, чтобы стопка совпадала со швом */
-    for(i=0;i<W;i+=st){x=sd==='R'?i:W-1-i; if(yt[x]>=0) T.push([x,yt[x]])}
-    for(i=W-1;i>=0;i-=st){x=sd==='R'?i:W-1-i; if(yb[x]>=0) B.push([x,yb[x]])}
+    for(i=0;i<W;i+=st){x=sd==='R'?i:W-1-i; if(yt[x]>=0) T.push([x,i<W*.14&&ytr[x]>=0?Math.max(yt[x],ytr[x]):yt[x]])}   /* у корешка стопка не выше настоящей кромки страницы — без шипа */
+    for(i=W-1;i>=0;i-=st){x=sd==='R'?i:W-1-i; if(yb[x]>=0) B.push([x,i<W*.14&&ybr[x]>=0?Math.min(yb[x],ybr[x]):yb[x]])}
     var ya=T[T.length-1][1], yz=B[0][1];
     /* внешний край блока: почти прямая (линейная подгонка по строкам) с лёгкой кривизной — без «веера» и клиньев у углов */
     var n1=0,sx=0,sy=0,sxy=0,syy=0; for(y=Math.ceil(ya/st)*st;y<=yz;y+=st) if(xo[y]>=0){n1++; sx+=xo[y]; sy+=y; sxy+=xo[y]*y; syy+=y*y}
@@ -635,9 +635,9 @@ var STK=(function(){
   function gutter(g){
     var Lp=C.L.pts, Rp=C.R.pts, yA=1e9, yB=-1e9;
     Lp.concat(Rp).forEach(function(p){ if(p.f<.03){ yA=Math.min(yA,C.L.y+p.y-Y0p); yB=Math.max(yB,C.L.y+p.y-Y0p) } });
-    yA=Math.max(C.L.y+C.L.pts[0].y,C.R.y+C.R.pts[0].y)-Y0p+12;
-    var gr=g.createLinearGradient(SPX-9,0,SPX+9,0); gr.addColorStop(0,'rgba(70,36,12,0)'); gr.addColorStop(.35,'rgba(70,36,12,.85)'); gr.addColorStop(.5,'rgb(46,22,6)'); gr.addColorStop(.65,'rgba(70,36,12,.85)'); gr.addColorStop(1,'rgba(70,36,12,0)');
-    g.fillStyle=gr; g.fillRect(SPX-9,yA,18,yB-yA+14);
+    yA=Math.min(C.L.y+C.L.pts[0].y,C.R.y+C.R.pts[0].y)-Y0p-6;
+    var gr=g.createLinearGradient(SPX-13,0,SPX+13,0); gr.addColorStop(0,'rgba(60,30,10,0)'); gr.addColorStop(.3,'rgba(60,30,10,.8)'); gr.addColorStop(.5,'rgb(38,18,4)'); gr.addColorStop(.7,'rgba(60,30,10,.8)'); gr.addColorStop(1,'rgba(60,30,10,0)');
+    g.fillStyle=gr; g.fillRect(SPX-13,yA,26,yB-yA+14);
     g.save(); g.translate(SPX,yB+24); g.scale(1,.4); var rg=g.createRadialGradient(0,0,0,0,0,112); rg.addColorStop(0,'rgba(30,12,3,.96)'); rg.addColorStop(.55,'rgba(34,14,4,.85)'); rg.addColorStop(1,'rgba(34,14,4,0)');
     g.fillStyle=rg; g.fillRect(-112,-112,224,224); g.restore();
   }
@@ -645,8 +645,8 @@ var STK=(function(){
     var P=prep(); if(!P) return;
     var g=c.getContext('2d'); g.clearRect(0,0,Wp,Hp);
     var b=p*V;
-    gutter(g);
     stack(g,P.L,'L',b); stack(g,P.R,'R',b);
+    gutter(g);
   }
   /* граница между стопками ползёт плавно и с замедлением, без рывка */
   var from=0, t0=0, DUR=1100;
@@ -1119,7 +1119,7 @@ function flipStuck(cur,cb){
   PAPER.reset(); PAPER2.reset();
   var P=sheetParams(), P2=sheetParams(); P.thMax=P2.thMax=rnd(166,174)*Math.PI/180; P.kbx=P2.kbx=1; P.kd=P2.kd=Math.max(P.kd,2.4); P.damp=P2.damp=2.2;
   var eH=rnd(50,62)*Math.PI/180/P.thMax, dMax=rnd(10,14)*Math.PI/180, tilt=rnd(-.5,.5);
-  var GR=makeGrab(HR,{s:rnd(.84,.93),v:rnd(.8,.9)},fA),        /* левая рука: нижний угол листа A */
+  var GR=makeGrab(HR,{s:1,v:rnd(.9,.95)},fA),        /* левая рука: нижний угол листа A */
       GL=makeGrab(HL,{s:rnd(.92,.99),v:rnd(.38,.58)},fB);         /* правая рука: отлипший край листа B */
   var TIN=rnd(850,1050), D1=rnd(1100,1400), HOLD=rnd(1000,1250), TIN2=rnd(750,900), D2=rnd(1500,1900), D2B=rnd(1500,1900), TOUT=850, SLIDE=(Math.random()<.5?-1:1)*rnd(26,40);
   var tS=TIN+D1+HOLD, t0=performance.now(), last=t0, acc=0, started=false, split=false, lStart=null, eB0=0;
@@ -1155,9 +1155,9 @@ function flipStuck(cur,cb){
     var t=now-t0, dtr=Math.min(.05,(now-last)/1000); last=now;
     if(!started&&t>TIN-120){started=true; fillPage(pR,S.pages[2*cur+5],'R',2*cur+6); deriveB(); if(GLX) GLX.drawSims([{sp:PAPER2.p,dir:1,set:1,thick:THICK},{sp:PAPER.p,dir:1,set:0,thick:THICK}])}
     var ptR=null, scR=1, rotR=0, liftR=0, ptL=null, scL=1, liftL=0;
-    if(t<TIN){ var u=EASE.snap(t/TIN); ptR=arc(away(pR0,560,HR),pR0,u,side*36); scR=1+.07*(1-u); rotR=side*9*(1-u); liftR=14*(1-u)*(1-u); poseSet(HR,handPhase('in',t/TIN)) }
+    if(t<TIN){ var u=EASE.snap(t/TIN); ptR=arc(away(pR0,560,HR),pR0,u,side*36); scR=1+.07*(1-u); rotR=side*9*(1-u); liftR=14*(1-u)*(1-u); poseSet(HR,0) }
     else {
-      if(!under){under=true; handUnder(HR,true)}
+      
       /* правая рука: тянет лист A, пока не покажется отлипший край, держит; после разделения ведёт лист налево */
       var eR, grabR=true, ur=(t-tS)/D2;
       if(t<TIN+D1) eR=eH*EASE.sine((t-TIN)/D1);
@@ -1166,23 +1166,23 @@ function flipStuck(cur,cb){
       if(!split&&t>=tS){ split=true; if(RUSTLE) RUSTLE.touch(.8);
         lStart=GL.pins.map(function(pn){var o=pn.n*3; return [PAPER2.p[o],PAPER2.p[o+1],PAPER2.p[o+2]]});
         var o0=GL.main*3; eB0=Math.max(.02,Math.atan2(PAPER2.p[o0+2],PAPER2.p[o0])/P2.thMax) }
-      if(grabR) setGrab(GR,eR,P); else if(!relR){relR=now; handUnder(HR,false); relRPt=nodePt(PAPER,GR.main); A.rel=now; if(RUSTLE) RUSTLE.touch(.5)}
+      if(grabR) setGrab(GR,eR,P); else if(!relR){relR=now; relRPt=nodePt(PAPER,GR.main); A.rel=now; if(RUSTLE) RUSTLE.touch(.5)}
       if(grabR){ ptR=nodePt(PAPER,GR.main); scR=ptR.k; liftR=(ptR.k-1)*110+1.5; rotR=0;
-        poseSet(HR,handPhase('pull',0)) }
-      else if(!offR){ var u3=Math.min(1,(now-relR)/TOUT), e3=EASE.slow(u3); ptR=arc(relRPt,away(relRPt,620,HR),e3,-side*30); scR=relRPt.k+.06*e3; liftR=(relRPt.k-1)*110+12*e3; poseSet(HR,handPhase('out',u3));
+        poseSet(HR,0) }
+      else if(!offR){ var u3=Math.min(1,(now-relR)/TOUT), e3=EASE.slow(u3); ptR=arc(relRPt,away(relRPt,620,HR),e3,-side*30); scR=relRPt.k+.06*e3; liftR=(relRPt.k-1)*110+12*e3; poseSet(HR,0);
         if(u3>=1){offR=true; showHand(HR,false)} }
       /* левая рука: подходит к отлипшему краю нижнего листа, цепляет его */
       var grabL=false;
       if(!split&&t>=tS-TIN2){ showHand(HL,true); var tg=nodePt(PAPER2,GL.main), ua=EASE.snap((t-(tS-TIN2))/TIN2);
-        ptL=arc(away(tg,560,HL),tg,ua,-side*30); scL=tg.k+.07*(1-ua); liftL=14*(1-ua)*(1-ua)+(tg.k-1)*110; poseSet(HL,handPhase('in',(t-(tS-TIN2))/TIN2)) }
+        ptL=arc(away(tg,560,HL),tg,ua,-side*30); scL=tg.k+.07*(1-ua); liftL=14*(1-ua)*(1-ua)+(tg.k-1)*110; poseSet(HL,0) }
       if(split){
         var ul=(t-tS)/D2B; grabL=ul<1;
         if(grabL){ setGrab(GL,eB0*(1-ss(0,.72,ul)),P2);
           var kb=Math.min(1,(t-tS)/260), sl=SLIDE*Math.sin(Math.PI*ss(.22,1,ul));       /* скольжение вдоль края возвращается в ноль: на отпускании лист не дёргается */          /* мягкий перехват, потом пальцы проводят вдоль края */
           GL.pins.forEach(function(pn,ii){var s0=lStart[ii]; pn.y+=sl; pn.x=lerp(s0[0],pn.x,kb); pn.y=lerp(s0[1],pn.y,kb); pn.z=lerp(s0[2],pn.z,kb)});
-          ptL=nodePt(PAPER2,GL.main); scL=ptL.k; liftL=(ptL.k-1)*110+1.5; poseSet(HL,handPhase('pull',0)) }
+          ptL=nodePt(PAPER2,GL.main); scL=ptL.k; liftL=(ptL.k-1)*110+1.5; poseSet(HL,0) }
         else if(!relL){relL=now; relLPt=nodePt(PAPER2,GL.main); B.rel=now; if(RUSTLE) RUSTLE.touch(.6)}
-        if(!grabL&&relL&&!offL){ var u4=Math.min(1,(now-relL)/TOUT), e4=EASE.slow(u4); ptL=arc(relLPt,away(relLPt,620,HL),e4,side*30); scL=relLPt.k+.06*e4; liftL=(relLPt.k-1)*110+12*e4; poseSet(HL,handPhase('out',u4));
+        if(!grabL&&relL&&!offL){ var u4=Math.min(1,(now-relL)/TOUT), e4=EASE.slow(u4); ptL=arc(relLPt,away(relLPt,620,HL),e4,side*30); scL=relLPt.k+.06*e4; liftL=(relLPt.k-1)*110+12*e4; poseSet(HL,0);
           if(u4>=1){offL=true; showHand(HL,false)} }
       }
       acc+=dtr; var n=0;
@@ -1487,6 +1487,63 @@ function tick(now){
 var FLAME=(function(){
   var c=document.getElementById('flamecv'), g=c.getContext('2d'), W=60, H=120, R=3;
   c.width=W*R; c.height=H*R; g.scale(R,R);
+  /* настоящее пламя на шейдере: шум поднимается вверх, форму рвёт турбулентность, цвет — от синего у фитиля до белого ядра и красной кромки.
+     Если WebGL нет — остаётся прежнее нарисованное пламя */
+  var GLF=(function(){
+    try{
+      var cv=document.createElement('canvas'); cv.id='flamegl'; cv.width=W*R; cv.height=H*R;
+      var gl=cv.getContext('webgl',{premultipliedAlpha:true,alpha:true,antialias:false}); if(!gl) return null;
+      function sh(t,src){var o=gl.createShader(t); gl.shaderSource(o,src); gl.compileShader(o); if(!gl.getShaderParameter(o,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o}
+      var pr=gl.createProgram();
+      gl.attachShader(pr,sh(gl.VERTEX_SHADER,'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}'));
+      gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,[
+      'precision highp float;',
+      'uniform float uT,uH,uW,uTx,uK;',
+      'float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}',
+      'float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}',
+      'float fbm(vec2 p){float a=.5,s=0.;for(int i=0;i<4;i++){s+=a*noise(p);p=p*2.03+vec2(1.7,9.2);a*=.5;}return s;}',
+      'vec3 ramp(float h){vec3 c=vec3(.6,.1,.02);c=mix(c,vec3(1.,.4,.06),smoothstep(.06,.3,h));c=mix(c,vec3(1.,.7,.15),smoothstep(.2,.45,h));c=mix(c,vec3(1.,.94,.62),smoothstep(.42,.7,h));return c;}',
+      'void main(){',
+      '  vec2 px=gl_FragCoord.xy/'+R+'.;',
+      '  float x=px.x-30.,y=px.y-6.;',
+      '  float v=y/uH;',
+      '  if(v<-.12||v>1.25){gl_FragColor=vec4(0.);return;}',
+      '  float vv=max(v,0.);',
+      '  float n1=fbm(vec2(x*.085,y*.055-uT*1.7)), n2=fbm(vec2(x*.19+5.,y*.12-uT*3.1));',
+      '  float warp=(n1-.5)*8.*smoothstep(0.,.75,vv)+(n2-.5)*2.4*vv;',
+      '  float xx=x-uTx*vv*vv-warp;',
+      '  float prof=uW*1.55*pow(max(0.,1.-vv),.7)*(.5+.5*smoothstep(0.,.22,vv));',
+      '  prof*=1.+.18*(fbm(vec2(y*.08-uT*2.2,3.))-.5);',
+      '  float d=abs(xx)/max(prof,.001);',
+      '  float body=1.-smoothstep(.35,1.1,d);',
+      '  float er=fbm(vec2(x*.14+9.,y*.09-uT*3.2));',
+      '  float cap=1.-smoothstep(.55,1.,vv+(er-.5)*.55);',
+      '  float dens=body*cap*smoothstep(-.06,.08,v);',
+      '  float heat=dens*(1.-vv*.4)*(1.-.4*smoothstep(.2,1.,d));',
+      '  float low=1.-smoothstep(0.,.3,vv);',
+      '  heat*=1.-.55*exp(-x*x/(uW*uW*.1))*low*(1.-smoothstep(0.,.1,vv))*.9;',   /* тёмная паровая зона у фитиля */
+      '  vec3 col=ramp(heat);',
+      '  float bx2=x/(uW*.62), by2=(y-1.6)/(uH*.13);',
+      '  float blue=exp(-(bx2*bx2+by2*by2))*smoothstep(-.02,.05,v);',
+      '  col=mix(col,vec3(.28,.38,1.),blue*.75);',
+      '  float a=smoothstep(.0,.34,heat);',
+      '  a=max(a,blue*.55);',
+      '  float halo=.16*exp(-(x*x/(uW*uW*5.)+pow((y-uH*.4)/(uH*.7),2.)));',
+      '  vec3 hc=vec3(1.,.55,.15);',
+      '  float A=clamp(a*.97+halo*(1.-a),0.,1.);',
+      '  vec3 C=(col*a*.97+hc*halo*(1.-a));',
+      '  gl_FragColor=vec4(C*uK,A);',
+      '}'].join('\n')));
+      gl.linkProgram(pr); if(!gl.getProgramParameter(pr,gl.LINK_STATUS)) throw new Error('link');
+      gl.useProgram(pr);
+      var b=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+      var al=gl.getAttribLocation(pr,'a'); gl.enableVertexAttribArray(al); gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
+      var U={}; ['uT','uH','uW','uTx','uK'].forEach(function(n){U[n]=gl.getUniformLocation(pr,n)});
+      gl.viewport(0,0,cv.width,cv.height); gl.clearColor(0,0,0,0);
+      c.parentNode.insertBefore(cv,c.nextSibling); c.style.display='none';
+      return {draw:function(t,h,w,tx,k){gl.clear(gl.COLOR_BUFFER_BIT); gl.uniform1f(U.uT,t); gl.uniform1f(U.uH,h); gl.uniform1f(U.uW,w); gl.uniform1f(U.uTx,tx); gl.uniform1f(U.uK,k); gl.drawArrays(gl.TRIANGLE_STRIP,0,4)}};
+    }catch(e){ if(window.console) console.warn('flame gl',e); var o=document.getElementById('flamegl'); if(o) o.remove(); c.style.display=''; return null }
+  })();
   var P=[0,1,2,3,4,5,6].map(function(){return rnd(0,100)});
   function nz(t,i){return Math.sin(t*1.13+P[i])*.5+Math.sin(t*2.71+P[i]*1.7)*.3+Math.sin(t*5.3+P[i]*2.3)*.2}
   var gust=0, gv=0, bx=30, by=114;
@@ -1506,6 +1563,7 @@ var FLAME=(function(){
     var flick=.06*nz(t*1.4,0)+.035*nz(t*6.5,1)+(Math.random()<.02?rnd(-.04,.05):0);
     var h=60*(1+flick)*(1-.15*Math.abs(gust)), w=7.2*(1+.04*nz(t*2,2)+.5*Math.abs(gust)*.2);
     var tx=3.2*nz(t*.7,3)+1.4*nz(t*3.1,4)+11*gust+.6*nz(t*11,5);
+    if(GLF){ GLF.draw(t,h,w*1.12,tx*1.1,1); return Math.max(0,Math.min(1,(h/60-.86)/.26)) }
     g.clearRect(0,0,W,H);
     /* мягкий ореол */
     g.globalCompositeOperation='lighter';
