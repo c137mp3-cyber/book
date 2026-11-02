@@ -71,6 +71,7 @@ body.haslens .lens{display:block}
 
 /* руки */
 .handfx{position:absolute;left:0;top:0;width:0;height:0;z-index:31;pointer-events:none;display:none}
+.handu{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;display:none}
 .hand{position:absolute;left:0;top:0;width:0;height:0}
 /* шов у корешка: мягкая складка поверх обеих страниц */
 #spine{position:absolute;pointer-events:none;
@@ -206,13 +207,48 @@ function lerp(a,b,t){return a+(b-a)*t}
 var HANDS={
  lens:{img:'assets/hand_lens.webp',W:520,H:1075,sc:.15,xl:3,xr:505,sk:0,taper:1,
    stops:['#3f1d2d','#783f41','#4d2129','#5d2d34','#8b4c51','#673238','#461f27','#462227','#462a40']},
- pinch:{img:'assets/hand_pinch2.webp',W:560,H:1285,px:235,py:48,ba:98,sc:.375,noext:1,s:.97,v:.9,cb:.55,vr:[.55,.95]},
+ pinch:{live:1,W:560,H:1360,px:455,py:148,ba:94.7,sc:.375,noext:1,s:.97,v:.9,cb:.55,vr:[.55,.95]},
  palm:{img:'assets/hand_palm2.webp',W:560,H:1087,px:30,py:12,ba:73.5,sc:.41,noext:1,s:.9,v:.55,cb:0,vr:[.4,.8]},
  two:{img:'assets/hand_two2.webp',W:560,H:998,px:185,py:15,ba:86,sc:.41,noext:1,s:.97,v:.45,cb:.1,vr:[.35,.75]},
- pinchL:{img:'assets/hand_pinch2.webp',W:560,H:1285,px:325,py:48,ba:82,sc:.375,noext:1,mirror:1,s:.97,v:.6,cb:0},
+ pinchL:{live:1,W:560,H:1360,px:105,py:148,ba:85.3,sc:.375,noext:1,mirror:1,s:.97,v:.6,cb:0},
  quill:{img:'assets/hand_quill2.webp',W:560,H:1166,px:100,py:178,ba:72,sc:.4,noext:1}
 };
+/* живая рука: несколько поз одной кисти, выровненных по манжете; позы сменяются короткими переходами.
+   Для щипка кончик большого пальца вынесен в отдельный слой под листом — лист оказывается между пальцами */
+var POSES=['open','spread','pinch','lift','release','flat'], UNDER=['pinch','lift'];
+function liveImg(h,src){var im=document.createElement('img'); im.src=src; im.alt=''; im.style.cssText='position:absolute;left:0;top:0;width:'+h.W+'px;height:'+h.H+'px;opacity:0';
+  if(h.mirror) im.style.transform='scaleX(-1)';
+  im.style.webkitMaskImage=im.style.maskImage='linear-gradient(180deg,#000 0,#000 66%,transparent 96%)'; return im}
+function buildLive(h,box){
+  h.imgs={}; POSES.forEach(function(n){var im=liveImg(h,'assets/hp_'+n+(UNDER.indexOf(n)>=0?'_t':'')+'.webp'); box.appendChild(im); h.imgs[n]=im});
+  box.style.width=h.W+'px'; box.style.height=h.H+'px';
+  /* слой под листом живёт внутри книги, между страницами и 3D-листом */
+  var ufx=document.createElement('div'); ufx.className='handu'; var uw=document.createElement('div'); uw.className='hand'; ufx.appendChild(uw);
+  var uin=document.createElement('div'); uin.className='hin'; uin.style.left=(-h.px*h.sc)+'px'; uin.style.top=(-h.py*h.sc)+'px'; uin.style.transform='scale('+h.sc+')';
+  uin.style.width=h.W+'px'; uin.style.height=h.H+'px'; h.uimgs={};
+  UNDER.forEach(function(n){var im=liveImg(h,'assets/hp_'+n+'_u.webp'); uin.appendChild(im); h.uimgs[n]=im});
+  uw.appendChild(uin); bookwrap.insertBefore(ufx,glc); h.ufx=ufx; h.uel=uw;
+  h.mix={}; poseSet(h,{open:1});
+}
+function poseSet(h,mix){
+  if(!h.live) return;
+  POSES.forEach(function(n){var v=mix[n]||0; if(h.mix[n]!==v){h.imgs[n].style.opacity=v.toFixed(3); if(h.uimgs[n]) h.uimgs[n].style.opacity=v.toFixed(3)}});
+  h.mix=mix;
+}
+/* плавный переход между двумя позами: k 0..1 */
+function pmix(a,b,k){k=Math.max(0,Math.min(1,k)); var m={}; if(a===b){m[a]=1;return m}
+  /* новая поза быстро набирает полную непрозрачность, старая гаснет только потом: без «призрачных» полупрозрачных пальцев */
+  function ss(e0,e1,x){x=Math.max(0,Math.min(1,(x-e0)/(e1-e0))); return x*x*(3-2*x)}
+  m[b]=ss(0,.45,k); m[a]=1-ss(.55,1,k); return m}
+/* поза по фазе листания: подлёт (раскрытая → пальцы расходятся → щипок), тяга (щипок → кисть приподнята), отпускание (пальцы раскрываются → расслабленная) */
+function handPhase(kind,x){
+  if(kind==='in'){ if(x<.5) return {open:1}; if(x<.64) return pmix('open','spread',(x-.5)/.14); if(x<.86) return {spread:1}; return pmix('spread','pinch',(x-.86)/.1) }
+  if(kind==='pull'){ if(x<.12) return {pinch:1}; return pmix('pinch','lift',(x-.12)/.12) }
+  if(x<.14) return pmix('lift','release',x/.14); if(x<.5) return {release:1}; return pmix('release','open',(x-.5)/.25);
+}
+function showHand(h,on){h.fx.style.display=on?'block':'none'; if(h.ufx) h.ufx.style.display=on?'block':'none'}
 function buildHand(h,box,ext){
+  if(h.live){buildLive(h,box); return}
   var im=document.createElement('img'); im.src=h.img; im.alt=''; im.style.width=h.W+'px'; im.style.height=h.H+'px';
   if(h.mirror) im.style.transform='scaleX(-1)';
   if(h.noext){im.style.webkitMaskImage=im.style.maskImage='linear-gradient(180deg,#000 0,#000 68%,transparent 97%)'}
@@ -300,21 +336,87 @@ function inkCanvas(pg,side,num){
 }
 /* страница = вырезка нарисованной страницы из картины + текст, впитанный в бумагу */
 var PAGESRC={L:'assets/pageL2.webp',R:'assets/pageR2.webp'}, PAGEART={}, TEXT=Q;
-function pageTex(pg,side,num){
-  if(pg._t&&pg._t.side===side) return pg._t.cv;
-  var art=PAGEART[side], c=document.createElement('canvas'); c.width=art.width; c.height=art.height; var g=c.getContext('2d');
-  g.drawImage(art,0,0);
-  /* текст ложится по рельефу: каждый столбик плоского текста растягивается между краями страницы */
-  var ink=inkCanvas(pg,side,num), X0=side==='R'?X0R:X0L, left=side==='R'?LX0:LX0-LW, cw=1/RINK;
-  g.globalCompositeOperation='multiply';
-  for(var i=0;i<ink.width;i++){
-    var X=X0+(i+.5)*cw, t=relY(side,X,0), b=relY(side,X,1);
-    g.drawImage(ink,i,0,1,ink.height,(X0+i*cw-left)*TEXT,(t-LY0)*TEXT,cw*TEXT+.6,(b-t)*TEXT);
+/* ---------- листы: у каждого физического листа своя бумага (картинка), оборот — её зеркало ----------
+   правая страница разворота i и левая страница разворота i+1 — один и тот же лист */
+var SHEETSRC=['assets/sheet0.webp','assets/sheet1.webp','assets/sheet2.webp','assets/sheet3.webp','assets/sheet4.webp','assets/sheet5.webp','assets/sheet6.webp'];
+var SHEETS=[], SHEETMAP={};
+function sheetIdOf(p){return p%2?(p-1)/2:p/2-1}
+function sheetOf(p){
+  var id=sheetIdOf(p);
+  if(!SHEETMAP[id]){
+    var n=SHEETS.length*2, prev=SHEETMAP[id-1], k;
+    do{k=Math.random()*n|0}while(n>2&&prev&&k===prev.k);
+    SHEETMAP[id]={k:k};
   }
-  g.globalCompositeOperation='destination-in'; g.drawImage(art,0,0);
-  pg._t={cv:c,side:side};
+  var k2=SHEETMAP[id].k; return SHEETS.length?SHEETS[k2>>1][k2&1]:null;
+}
+function relRaw(arr,side,x){var X=RELX[side], A=arr[side], i;
+  if(x<=X[0]) return A[0]; if(x>=X[X.length-1]) return A[A.length-1];
+  for(i=1;i<X.length;i++) if(x<=X[i]){var u=(x-X[i-1])/(X[i]-X[i-1]); return lerp(A[i-1],A[i],u)} return A[A.length-1]}
+/* светотень нарисованной страницы (размытая яркость), чтобы новый лист лёг под тот же свет свечи */
+var SHADE={};
+function shadeOf(side){
+  if(SHADE[side]) return SHADE[side];
+  var art=PAGEART[side], W=art.width, H=art.height, c=document.createElement('canvas'); c.width=W; c.height=H; var g=c.getContext('2d');
+  g.filter='blur(14px)'; g.drawImage(art,0,0); g.filter='none';
+  var d=g.getImageData(0,0,W,H), a=d.data, L=[], i;
+  for(i=0;i<a.length;i+=4*37) if(a[i+3]>200) L.push(.3*a[i]+.59*a[i+1]+.11*a[i+2]);
+  L.sort(function(x,y){return x-y}); var ref=L[Math.floor(L.length*.9)]||200;
+  for(i=0;i<a.length;i+=4){var l=(.3*a[i]+.59*a[i+1]+.11*a[i+2])/ref, v=Math.max(0,Math.min(255,255*Math.pow(Math.min(1.05,l),1.15))); a[i]=a[i+1]=a[i+2]=v; a[i+3]=255}
+  g.putImageData(d,0,0); SHADE[side]=c; return c;
+}
+/* лист ложится по рельефу страницы: каждый столбик картинки растягивается между верхним и нижним краем.
+   Картинка чуть больше нарисованной страницы: та выглядывает только в надрывах и вырезах листа */
+var SH_IN={t:-3,b:-3,o:-4,s:0};
+function warpSheet(img,side,W,H){
+  var c=document.createElement('canvas'); c.width=W; c.height=H; var g=c.getContext('2d'), src=img;
+  if(side==='L'){ src=document.createElement('canvas'); src.width=img.width; src.height=img.height; var mg=src.getContext('2d'); mg.translate(img.width,0); mg.scale(-1,1); mg.drawImage(img,0,0) }
+  var left=side==='R'?LX0:LX0-LW, sp=LX0, outer=side==='R'?RELX.R[RELX.R.length-1]-SH_IN.o:RELX.L[0]+SH_IN.o,
+      xa=side==='R'?sp+SH_IN.s:outer, xb=side==='R'?outer:sp-SH_IN.s, NCOL=120, iw=src.width, ih=src.height;
+  for(var k=0;k<NCOL;k++){
+    var u0=k/NCOL, u1=(k+1)/NCOL, X0=xa+(xb-xa)*u0, X1=xa+(xb-xa)*u1, Xm=(X0+X1)/2,
+        t=relRaw(RELT,side,Xm)+SH_IN.t, b=relRaw(RELB,side,Xm)-SH_IN.b;
+    g.drawImage(src,u0*iw,0,(u1-u0)*iw,ih,(X0-left)*TEXT,(t-LY0)*TEXT,(X1-X0)*TEXT+.8,(b-t)*TEXT);
+  }
   return c;
 }
+/* слой листа для стороны: изгиб + светотень страницы + цвет подогнан под нарисованную бумагу (кэш на вариант) */
+var LAYER={};
+function sheetLayer(p,side){
+  var id=sheetIdOf(p); sheetOf(p); var k=SHEETMAP[id].k, key=k+side;
+  if(LAYER[key]) return LAYER[key];
+  var art=PAGEART[side], W=art.width, H=art.height, img=SHEETS[k>>1][k&1];
+  var ws=warpSheet(img,side,W,H), c=document.createElement('canvas'); c.width=W; c.height=H; var g=c.getContext('2d');
+  g.drawImage(ws,0,0); g.globalCompositeOperation='multiply'; g.drawImage(shadeOf(side),0,0);
+  g.globalCompositeOperation='destination-in'; g.drawImage(ws,0,0); g.globalCompositeOperation='source-over';
+  var d=g.getImageData(0,0,W,H), A=d.data, ac=document.createElement('canvas'); ac.width=W; ac.height=H; var ag=ac.getContext('2d'); ag.drawImage(art,0,0);
+  var B=ag.getImageData(0,0,W,H).data, ms=[0,0,0], ma=[0,0,0], ns=0, na=0, i;
+  for(i=0;i<A.length;i+=4*7){ if(A[i+3]>220){ms[0]+=A[i];ms[1]+=A[i+1];ms[2]+=A[i+2];ns++} if(B[i+3]>220){ma[0]+=B[i];ma[1]+=B[i+1];ma[2]+=B[i+2];na++} }
+  var gn=[0,1,2].map(function(j){var v=(ma[j]/na)/(ms[j]/ns||1); v=Math.max(.7,Math.min(1.7,v)); return 1+(v-1)*.85});
+  for(i=0;i<A.length;i+=4){A[i]=Math.min(255,A[i]*gn[0]); A[i+1]=Math.min(255,A[i+1]*gn[1]); A[i+2]=Math.min(255,A[i+2]*gn[2])}
+  g.putImageData(d,0,0);
+  LAYER[key]=c; return c;
+}
+function pageTex(pg,side,num){
+  if(pg._t&&pg._t.side===side) return pg._t.cv;
+  var art=PAGEART[side], W=art.width, H=art.height, c=document.createElement('canvas'); c.width=W; c.height=H; var g=c.getContext('2d');
+  var ly=SHEETS.length?sheetLayer(num-1,side):art, lf=document.createElement('canvas'); lf.width=W; lf.height=H; var lg=lf.getContext('2d');
+  lg.drawImage(ly,0,0);
+  /* текст ложится по рельефу: каждый столбик плоского текста растягивается между краями страницы */
+  var ink=inkCanvas(pg,side,num), X0=side==='R'?X0R:X0L, left=side==='R'?LX0:LX0-LW, cw=1/RINK;
+  lg.globalCompositeOperation='multiply';
+  for(var i=0;i<ink.width;i++){
+    var X=X0+(i+.5)*cw, t=relY(side,X,0), b=relY(side,X,1);
+    lg.drawImage(ink,i,0,1,ink.height,(X0+i*cw-left)*TEXT,(t-LY0)*TEXT,cw*TEXT+.6,(b-t)*TEXT);
+  }
+  lg.globalCompositeOperation='destination-in'; lg.drawImage(ly,0,0); lg.globalCompositeOperation='source-over';
+  /* на столе: нарисованная страница выглядывает в вырезах листа, как следующие листы блока */
+  g.drawImage(art,0,0); g.drawImage(lf,0,0);
+  g.globalCompositeOperation='destination-in'; g.drawImage(art,0,0);
+  pg._t={cv:c,leaf:lf,side:side};
+  return c;
+}
+function leafTex(pg,side,num){pageTex(pg,side,num); return pg._t.leaf}
 /* лежащая страница не плоская: у корешка поднимается, в середине выгнута. Тот же профиль и свет, что у 3D-листа */
 var OXC=BW/2, OYC=BH/2, FOC=2600;
 function phiBase(s){return 0}   /* изгиб уже нарисован на картине */
@@ -577,7 +679,7 @@ var PREP={idx:-1,f:null,b:null,cur:-1};
 function prep(cur){
   var idx=(cur+1)%spreadsCount();
   if(!GLX||PREP.cur===cur&&PREP.idx===idx) return;
-  PREP={cur:cur,idx:idx,f:pageTex(S.pages[2*cur+1],'R',2*cur+2),b:pageTex(S.pages[2*idx],'L',2*idx+1)};
+  PREP={cur:cur,idx:idx,f:leafTex(S.pages[2*cur+1],'R',2*cur+2),b:leafTex(S.pages[2*idx],'L',2*idx+1)};
 }
 
 /* ---------- характер листания ---------- */
@@ -595,7 +697,7 @@ var EASE={
 };
 function mkParams(force){
   var ease=pick(['sine','smoother','io','slow','lazy','hang','sine']);
-  var pose=force||pick(['pinch','pinch','palm','two']);
+  var pose=force||'pinch';
   var H=HANDS[pose];
   /* бумага жёсткая: без волн, край сначала ведёт, после середины отстаёт */
   return {ease:ease,pose:pose,dur:rnd(1900,2900)*(ease==='hang'?1.2:1),
@@ -625,7 +727,9 @@ function anchor(pt){return {x:330+(pt.x-270)*.35, y:1300}}
 function anchorL(pt){return {x:150+(pt.x-270)*.35, y:1300}}
 function placeHand(h,pt,sc,rot,lift){
   var an=(h.mirror?anchorL:anchor)(pt), ang=Math.atan2(an.y-pt.y,an.x-pt.x)*180/Math.PI;
-  h.el.style.transform='translate('+pt.x.toFixed(1)+'px,'+pt.y.toFixed(1)+'px) rotate('+(ang-h.ba+(rot||0)).toFixed(2)+'deg) scale('+(sc||1).toFixed(4)+')';
+  var tr=' rotate('+(ang-h.ba+(rot||0)).toFixed(2)+'deg) scale('+(sc||1).toFixed(4)+')';
+  h.el.style.transform='translate('+pt.x.toFixed(1)+'px,'+pt.y.toFixed(1)+'px)'+tr;
+  if(h.uel) h.uel.style.transform='translate('+(pt.x-BX).toFixed(1)+'px,'+(pt.y-BY).toFixed(1)+'px)'+tr;
   var L=lift||0, off=5+L;
   h.fx.style.filter='drop-shadow('+(off*.6).toFixed(1)+'px '+off.toFixed(1)+'px '+(6+L*.7).toFixed(1)+'px rgba(15,5,0,'+Math.max(.22,.5-L*.012).toFixed(2)+'))';
 }
@@ -723,6 +827,7 @@ function setGrab(G,e,P){
 /* у каждого листа свои рваные края: из копии текстуры вырезаются случайные надрывы по внешней кромке и сорванный уголок.
    Копия нужна только в полёте — лежащая страница остаётся как на картине, поэтому в начале и в конце скачка нет. */
 function leafVar(src,side){
+  if(q.get('torn')!=='1') return src;            /* у листов теперь свои края; случайные надрывы — по ?torn=1 */
   var W=src.width, H=src.height, c=document.createElement('canvas'); c.width=W; c.height=H;
   var g=c.getContext('2d'); g.drawImage(src,0,0);
   var a=g.getImageData(0,0,W,H).data, sg=side==='R'?1:-1;
@@ -750,7 +855,7 @@ function leafVar(src,side){
 }
 /* перевернуть один лист. o: dir (1 справа налево, -1 обратно), F/B текстуры, onStart/onLand, pose; cb по окончании */
 function flipSheet(o,cb){
-  var P=sheetParams(), pose=o.pose||pick(['pinch','pinch','palm','two']), H=HANDS[pose], dir=o.dir, ez=EASE[P.ease];
+  var P=sheetParams(), pose=o.pose||'pinch', H=HANDS[pose], dir=o.dir, ez=EASE[P.ease];
   var mp=mkParams(pose); P.wr=mp.wr; P.side=mp.side*dir;
   if(GLX) GLX.setTex(leafVar(o.F,'R'),leafVar(o.B,'L'));
   PAPER.reset();
@@ -758,7 +863,7 @@ function flipSheet(o,cb){
   var TIN=rnd(820,1120), TOUT=rnd(720,980), t0=performance.now(), started=false, released=0, relPt=null, blend=0, done=false, last=t0, acc=0, landed=false, handOff=false;
   var p0=proj(dir,R0,Y0,0), touched=false, prevE=null, sSm=0;
   if(RUSTLE) RUSTLE.begin();
-  H.fx.style.display='block';
+  showHand(H,true);
   function arc(a,b,u,amp){var dx=b.x-a.x, dy=b.y-a.y, l=Math.hypot(dx,dy)||1, ww=Math.sin(Math.PI*u)*amp;
     return {x:lerp(a.x,b.x,u)-dy/l*ww, y:lerp(a.y,b.y,u)+dx/l*ww}}
   (function frame(now){
@@ -769,6 +874,7 @@ function flipSheet(o,cb){
     if(t<TIN){
       var u=EASE.snap(t/TIN); pt=arc(away(p0,560),p0,u,P.side*36);
       sc=1+.07*(1-u); rot=P.side*9*(1-u); lift=14*(1-u)*(1-u)+2*Math.sin(Math.PI*u);
+      poseSet(H,handPhase('in',t/TIN));
     } else {
       var u2=(t-TIN)/P.dur, grabbing=u2<1;
       if(!touched){touched=true; if(RUSTLE) RUSTLE.touch(1)}
@@ -791,10 +897,12 @@ function flipSheet(o,cb){
       if(grabbing){
         pt=proj(dir,PAPER.p[gn*3],PAPER.p[gn*3+1],PAPER.p[gn*3+2]);
         var se=Math.sin(Math.PI*Math.max(0,u2)); sc=pt.k; rot=P.wr*se; lift=(pt.k-1)*110+1.5*se;
+        poseSet(H,handPhase('pull',u2));
       } else if(!handOff){
         var u3=Math.min(1,(now-released)/TOUT), e3=EASE.slow(u3); pt=arc(relPt,away(relPt,620),e3,-P.side*30);
         sc=relPt.k+.06*e3; rot=-P.side*7*e3; lift=(relPt.k-1)*110+12*e3;
-        if(u3>=1){handOff=true; H.fx.style.display='none'}
+        poseSet(H,handPhase('out',u3));
+        if(u3>=1){handOff=true; showHand(H,false)}
       }
     }
     if(pt){pt.x+=Math.sin(now/310)*.6; pt.y+=Math.cos(now/430)*.5; placeHand(H,pt,sc,rot,lift)}
@@ -802,7 +910,7 @@ function flipSheet(o,cb){
     requestAnimationFrame(frame);
   })(t0);
 }
-function texOf(k,side){return pageTex(S.pages[k],side,k+1)}
+function texOf(k,side){return leafTex(S.pages[k],side,k+1)}
 function flipTo(idx,force){
   if(S.flipping) return;
   S.flipping=true; if(LENS) lens.style.opacity=0; S.act=null; markActive();
@@ -842,7 +950,7 @@ function flipStuck(cur,cb){
       B={pp:PAPER2,rel:0,relPt:null,blend:0,landed:false,toLeft:false};
   var offR=false, offL=false, pR0=proj(1,GR.R0,GR.Y0,0), side=Math.random()<.5?-1:1, prevA=null, prevB=null, sm=0, relR=0, relRPt=null, relL=0, relLPt=null;
   if(RUSTLE) RUSTLE.begin();
-  HR.fx.style.display='block';
+  showHand(HR,true);
   function arc(a,b,u,amp){var dx=b.x-a.x, dy=b.y-a.y, l=Math.hypot(dx,dy)||1, ww=Math.sin(Math.PI*u)*amp;
     return {x:lerp(a.x,b.x,u)-dy/l*ww, y:lerp(a.y,b.y,u)+dx/l*ww}}
   function nodePt(pp,n){return proj(1,pp.p[n*3],pp.p[n*3+1],pp.p[n*3+2])}
@@ -860,7 +968,7 @@ function flipStuck(cur,cb){
     var t=now-t0, dtr=Math.min(.05,(now-last)/1000); last=now;
     if(!started&&t>TIN-120){started=true; fillPage(pR,S.pages[2*cur+5],'R',2*cur+6); if(GLX) GLX.drawSims([{sp:PAPER.p,dir:1,set:0,thick:THICK*2.4}])}
     var ptR=null, scR=1, rotR=0, liftR=0, ptL=null, scL=1, liftL=0;
-    if(t<TIN){ var u=EASE.snap(t/TIN); ptR=arc(away(pR0,560),pR0,u,side*36); scR=1+.07*(1-u); rotR=side*9*(1-u); liftR=14*(1-u)*(1-u) }
+    if(t<TIN){ var u=EASE.snap(t/TIN); ptR=arc(away(pR0,560),pR0,u,side*36); scR=1+.07*(1-u); rotR=side*9*(1-u); liftR=14*(1-u)*(1-u); poseSet(HR,handPhase('in',t/TIN)) }
     else {
       /* правая рука: тянет пару до вертикали, держит и трёт край, после разделения укладывает задний лист обратно */
       var eR, grabR=true;
@@ -873,22 +981,23 @@ function flipStuck(cur,cb){
         if(RUSTLE) RUSTLE.touch(.8) }
       var holder=split?PAPER2:PAPER;                                    /* чей лист держит правая рука */
       if(grabR) setGrab(GR,eR,P); else if(!relR){relR=now; relRPt=nodePt(PAPER2,GR.main); B.rel=now; if(RUSTLE) RUSTLE.touch(.5)}
-      if(grabR){ ptR=nodePt(holder,GR.main); scR=ptR.k; liftR=(ptR.k-1)*110+1.5; rotR=t<tS&&t>TIN+D1?Math.sin(t*.03)*2:0 }
-      else if(!offR){ var u3=Math.min(1,(now-relR)/TOUT), e3=EASE.slow(u3); ptR=arc(relRPt,away(relRPt,620),e3,-side*30); scR=relRPt.k+.06*e3; liftR=(relRPt.k-1)*110+12*e3;
-        if(u3>=1){offR=true; HR.fx.style.display='none'} }
+      if(grabR){ ptR=nodePt(holder,GR.main); scR=ptR.k; liftR=(ptR.k-1)*110+1.5; rotR=t<tS&&t>TIN+D1?Math.sin(t*.03)*2:0;
+        poseSet(HR,t<tS?handPhase('pull',(t-TIN)/D1):handPhase('pull',1-Math.min(1,(t-tS)/D2B)*.8)) }
+      else if(!offR){ var u3=Math.min(1,(now-relR)/TOUT), e3=EASE.slow(u3); ptR=arc(relRPt,away(relRPt,620),e3,-side*30); scR=relRPt.k+.06*e3; liftR=(relRPt.k-1)*110+12*e3; poseSet(HR,handPhase('out',u3));
+        if(u3>=1){offR=true; showHand(HR,false)} }
       /* левая рука: подходит во время паузы, перехватывает верхний лист и доводит налево */
       var grabL=false;
-      if(!split&&t>=tS-TIN2){ HL.fx.style.display='block'; var tg=nodePt(PAPER,GL.main), ua=EASE.snap((t-(tS-TIN2))/TIN2);
-        ptL=arc(away(tg,560,HL),tg,ua,-side*30); scL=tg.k+.07*(1-ua); liftL=14*(1-ua)*(1-ua)+(tg.k-1)*110 }
+      if(!split&&t>=tS-TIN2){ showHand(HL,true); var tg=nodePt(PAPER,GL.main), ua=EASE.snap((t-(tS-TIN2))/TIN2);
+        ptL=arc(away(tg,560,HL),tg,ua,-side*30); scL=tg.k+.07*(1-ua); liftL=14*(1-ua)*(1-ua)+(tg.k-1)*110; poseSet(HL,handPhase('in',(t-(tS-TIN2))/TIN2)) }
       if(split){
         var ul=(t-tS)/D2; grabL=ul<1;
         if(grabL){ setGrab(GL,eH+(1-eH)*EASE.sine(Math.min(1,ul)),P2);
           var kb=Math.min(1,(t-tS)/260);                                     /* мягкий перехват, без рывка */
           GL.pins.forEach(function(pn,ii){var s0=lStart[ii]; pn.x=lerp(s0[0],pn.x,kb); pn.y=lerp(s0[1],pn.y,kb); pn.z=lerp(s0[2],pn.z,kb)});
-          ptL=nodePt(PAPER,GL.main); scL=ptL.k; liftL=(ptL.k-1)*110+1.5 }
+          ptL=nodePt(PAPER,GL.main); scL=ptL.k; liftL=(ptL.k-1)*110+1.5; poseSet(HL,handPhase('pull',ul)) }
         else if(!relL){relL=now; relLPt=nodePt(PAPER,GL.main); A.rel=now; if(RUSTLE) RUSTLE.touch(.6)}
-        if(!grabL&&relL&&!offL){ var u4=Math.min(1,(now-relL)/TOUT), e4=EASE.slow(u4); ptL=arc(relLPt,away(relLPt,620,HL),e4,side*30); scL=relLPt.k+.06*e4; liftL=(relLPt.k-1)*110+12*e4;
-          if(u4>=1){offL=true; HL.fx.style.display='none'} }
+        if(!grabL&&relL&&!offL){ var u4=Math.min(1,(now-relL)/TOUT), e4=EASE.slow(u4); ptL=arc(relLPt,away(relLPt,620,HL),e4,side*30); scL=relLPt.k+.06*e4; liftL=(relLPt.k-1)*110+12*e4; poseSet(HL,handPhase('out',u4));
+          if(u4>=1){offL=true; showHand(HL,false)} }
       }
       /* физика: до разделения правая рука ведёт пару (лист A), после — A ведёт левая, B правая */
       acc+=dtr; var n=0;
@@ -988,7 +1097,7 @@ var RUSTLE=(function(){
 })();
 
 function setStory(text){
-  S.pages=paginate(text); S.spread=0; PREP.cur=-1; renderSpread(0); buildSeq(); refreshLens();
+  SHEETMAP={}; S.pages=paginate(text); S.spread=0; PREP.cur=-1; renderSpread(0); buildSeq(); refreshLens();
   S.lx=S.tx=TXL; S.ly=S.ty=TOPY+LH/2; S.hold=0;
 }
 
@@ -1220,8 +1329,11 @@ if(q.get('demo')!=='0'){
   addGift('Витя','Роза ×3');
 }
 
+var sheetsReady=Promise.all(SHEETSRC.map(function(src,i){return new Promise(function(res){var im=new Image(); im.onload=function(){
+    var fl=document.createElement('canvas'); fl.width=im.width; fl.height=im.height; var fg=fl.getContext('2d'); fg.translate(0,im.height); fg.scale(1,-1); fg.drawImage(im,0,0);
+    SHEETS[i]=[im,fl]; res()}; im.onerror=res; im.src=src})})).then(function(){SHEETS=SHEETS.filter(Boolean)});
 var libReady=Promise.all(['L','R'].map(function(k){return new Promise(function(res){var im=new Image(); im.onload=function(){PAGEART[k]=im; res()}; im.onerror=res; im.src=PAGESRC[k]})}));
-Promise.all([libReady,Promise.race([document.fonts.load('15px Lora'),new Promise(function(r){setTimeout(r,2500)})])]).then(function(){
+Promise.all([libReady,sheetsReady,Promise.race([document.fonts.load('15px Lora'),new Promise(function(r){setTimeout(r,2500)})])]).then(function(){
   setStory(STORY); requestAnimationFrame(function(t){last=t; tick(t)});
 });
 })();
