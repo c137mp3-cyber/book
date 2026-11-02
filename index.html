@@ -182,8 +182,7 @@ function lerp(a,b,t){return a+(b-a)*t}
 var HANDS={
  lens:{img:'assets/hand_lens.webp',W:520,H:1075,sc:.15,xl:3,xr:505,sk:0,taper:1,
    stops:['#3f1d2d','#783f41','#4d2129','#5d2d34','#8b4c51','#673238','#461f27','#462227','#462a40']},
- pinch:{img:'assets/hand_pinch.webp',W:520,H:544,px:147,py:57,ba:70,sc:.42,xl:326,xr:516,sk:.36,s:.97,v:.9,cb:.55,
-   stops:['#4b1326','#45152b','#451629','#441426','#4d182c','#601e31','#712637','#621f31','#561828']},
+ pinch:{img:'assets/hand_pinch2.webp',W:560,H:1285,px:235,py:48,ba:98,sc:.375,noext:1,s:.97,v:.9,cb:.55},
  palm:{img:'assets/hand_palm.webp',W:520,H:677,px:55,py:45,ba:68,sc:.36,xl:290,xr:516,sk:.36,s:.9,v:.55,cb:0,
    stops:['#350c1e','#350c1e','#5e1e2f','#541a2c','#903742','#79293a','#471224','#571427','#571427']},
  two:{img:'assets/hand_two.webp',W:520,H:668,px:48,py:18,ba:70,sc:.36,xl:280,xr:515,sk:.36,s:.97,v:.45,cb:.1,
@@ -192,6 +191,7 @@ var HANDS={
 function buildHand(h,box,ext){
   var im=document.createElement('img'); im.src=h.img; im.alt=''; im.style.width=h.W+'px'; im.style.height=h.H+'px';
   box.appendChild(im);
+  if(h.noext) {box.style.width=h.W+'px'; box.style.height=h.H+'px'; return}
   var e=document.createElement('div'); e.className='ext';
   var E=ext/h.sc;
   e.style.cssText='left:'+h.xl+'px;top:'+(h.H-3)+'px;width:'+(h.xr-h.xl)+'px;height:'+E+'px;transform:matrix(1,0,'+h.sk+',1,0,0);'+
@@ -486,12 +486,14 @@ function track(P,e,tm,sa,va){
   var X=LX0+x, Y=LY0+va*LHT, ox=BW/2, oy=BH/2, k=1600/(1600-z);
   return {x:BX+ox+(X-ox)*k, y:BY+oy+(Y-oy)*k};
 }
+/* «локоть» всегда за нижним краем, ближе к центру, чем кисть: рука идёт снизу, а не через весь экран */
+function anchor(pt){return {x:330+(pt.x-270)*.35, y:1300}}
 function placeHand(h,pt){
-  var ang=Math.atan2(ARMY-pt.y,ARMX-pt.x)*180/Math.PI;
+  var an=anchor(pt), ang=Math.atan2(an.y-pt.y,an.x-pt.x)*180/Math.PI;
   h.el.style.transform='translate('+pt.x.toFixed(1)+'px,'+pt.y.toFixed(1)+'px) rotate('+(ang-h.ba).toFixed(2)+'deg)';
 }
 function away(pt,dist){
-  var dx=ARMX-pt.x, dy=ARMY-pt.y, l=Math.hypot(dx,dy);
+  var an=anchor(pt), dx=an.x-pt.x, dy=an.y-pt.y, l=Math.hypot(dx,dy);
   return {x:pt.x+dx/l*dist, y:pt.y+dy/l*dist};
 }
 
