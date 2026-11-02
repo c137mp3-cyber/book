@@ -34,11 +34,13 @@ html,body{height:100%;background:#0a0604;overflow:hidden;font-family:Lora,Georgi
   background:repeating-linear-gradient(180deg,#f4dca6 0 1.3px,#b98a4c 1.3px 2.2px,#e8cb8e 2.2px 3.2px);
   box-shadow:inset 0 -4px 5px rgba(70,35,8,.55)}
 .spreadbox{position:absolute;inset:0}
-.pg{position:absolute;width:var(--pw);height:var(--ph)}
-.text{position:absolute;left:0;top:0;width:100%}
+.pg{position:absolute;width:var(--lw);height:var(--lh)}
+.pg>canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
+.text{position:absolute;width:var(--pw);height:var(--ph)}
+.pg.R .text{left:var(--txR);top:var(--tyy)}
+.pg.L .text{left:var(--txL);top:var(--tyy)}
 .line{position:absolute;left:0;width:100%;height:20px;border-radius:3px;color:transparent}
 .line.on{background:linear-gradient(90deg,rgba(255,196,90,0),rgba(255,196,90,.34) 6%,rgba(255,196,90,.34) 94%,rgba(255,196,90,0))}
-.ink{position:absolute;left:0;top:0;width:100%;height:100%;display:block;pointer-events:none}
 #gl{position:absolute;pointer-events:none;display:block}
 
 #candle{position:absolute;left:-14px;top:150px;width:96px;height:92px;z-index:8}
@@ -163,9 +165,10 @@ var stage=document.getElementById('stage'), pL=document.getElementById('pL'), pR
     glc=document.getElementById('gl');
 
 var rs=stage.style;
-rs.setProperty('--pw',PW+'px'); rs.setProperty('--ph',PH+'px');
+rs.setProperty('--pw',PW+'px'); rs.setProperty('--ph',PH+'px'); rs.setProperty('--lw',LW+'px'); rs.setProperty('--lh',LHT+'px');
+rs.setProperty('--txR',(X0R-LX0)+'px'); rs.setProperty('--txL',(X0L-(LX0-LW))+'px'); rs.setProperty('--tyy',(Y0-LY0)+'px');
 bookwrap.style.cssText+='left:'+BX+'px;top:'+BY+'px;width:'+BW+'px;height:'+BH+'px';
-pL.style.left=X0L+'px'; pL.style.top=Y0+'px'; pR.style.left=X0R+'px'; pR.style.top=Y0+'px';
+pL.style.left=(LX0-LW)+'px'; pL.style.top=LY0+'px'; pR.style.left=LX0+'px'; pR.style.top=LY0+'px';
 
 function fit(){stage.style.transform='scale('+Math.min(innerWidth/540,innerHeight/960)+')'}
 addEventListener('resize',fit); fit();
@@ -229,7 +232,7 @@ function paginate(text){
   lines.forEach(function(l){l.w=Math.min(TW,meas.measureText(l.text).width)});
   var pages=[];
   for(var i=0;i<lines.length;i+=PERP) pages.push({lines:lines.slice(i,i+PERP)});
-  if(pages.length%2) pages.push(null);
+  if(pages.length%2) pages.push({lines:[],blank:true});
   return pages;
 }
 /* зерно бумаги: вытравливает чернила неравномерно, как на настоящей странице */
@@ -263,23 +266,41 @@ function inkCanvas(pg,side,num){
     });
   });
   g.shadowBlur=0; g.globalAlpha=.6; g.fillStyle='#5a3a1a'; g.font='italic 12px Lora, Georgia, serif'; g.textAlign='center';
-  g.fillText(String(num),PW/2,PH-9); g.globalAlpha=1;
+  if(!pg.blank) g.fillText(String(num),PW/2,PH-9); g.globalAlpha=1;
   g.setTransform(1,0,0,1,0,0); g.globalCompositeOperation='destination-out';
   g.fillStyle=g.createPattern(NOISE,'repeat'); g.fillRect(0,0,c.width,c.height);
   pg._c={cv:c,side:side,url:null};
   return c;
 }
-function inkURL(pg,side,num){var cv=inkCanvas(pg,side,num); if(!pg._c.url) pg._c.url=cv.toDataURL('image/png'); return pg._c.url}
-function pageHTML(pg,side,num){
-  var h='<div class="text">';
-  if(pg) pg.lines.forEach(function(l,i){h+='<div class="line" style="top:'+(TT+i*LH)+'px">'+esc(l.text)+'</div>'});
-  h+='</div>';
-  if(pg) h+='<img class="ink" src="'+inkURL(pg,side,num)+'" alt="">';
-  return h;
+/* библиотека листов: у каждой страницы своя бумага и свой контур */
+var LIBSRC=['assets/leaf1.webp','assets/leaf2.webp','assets/leaf3.webp'], LIB=[];
+var TEXT=RINK, SPINECROP=.045;
+function pageTex(pg,side,num){
+  if(pg._t&&pg._t.side===side) return pg._t.cv;
+  if(pg._v==null) pg._v=Math.random()*LIB.length|0;
+  var c=document.createElement('canvas'); c.width=Math.round(LW*TEXT); c.height=Math.round(LHT*TEXT); var g=c.getContext('2d');
+  var art=LIB[pg._v], cw=art.width*SPINECROP;
+  /* край у корешка делаем ровным: срезаем рваную кромку листа */
+  if(side==='R') g.drawImage(art,cw,0,art.width-cw,art.height,0,0,c.width,c.height);
+  else g.drawImage(art,0,0,art.width-cw,art.height,0,0,c.width,c.height);
+  var gw=c.width*.12, gr=side==='R'?g.createLinearGradient(0,0,gw,0):g.createLinearGradient(c.width,0,c.width-gw,0);
+  gr.addColorStop(0,'rgba(70,32,6,.42)'); gr.addColorStop(1,'rgba(70,32,6,0)');
+  g.globalCompositeOperation='source-atop'; g.fillStyle=gr; g.fillRect(0,0,c.width,c.height); g.globalCompositeOperation='source-over';
+  var ox=side==='R'?X0R-LX0:X0L-(LX0-LW);
+  g.drawImage(inkCanvas(pg,side,num),ox*TEXT,(Y0-LY0)*TEXT,PW*TEXT,PH*TEXT);
+  pg._t={cv:c,side:side};
+  return c;
+}
+function fillPage(el,pg,side,num){
+  el.innerHTML='';
+  el.appendChild(pageTex(pg,side,num));
+  var t=document.createElement('div'); t.className='text';
+  pg.lines.forEach(function(l,i){var d=document.createElement('div'); d.className='line'; d.style.top=(TT+i*LH)+'px'; d.textContent=l.text; t.appendChild(d)});
+  el.appendChild(t);
 }
 function renderSpread(i){
-  pL.innerHTML=pageHTML(S.pages[2*i],'L',2*i+1);
-  pR.innerHTML=pageHTML(S.pages[2*i+1],'R',2*i+2);
+  fillPage(pL,S.pages[2*i],'L',2*i+1);
+  fillPage(pR,S.pages[2*i+1],'R',2*i+2);
   setStack(i,false);
   setTimeout(function(){prep(i)},400);
 }
@@ -336,7 +357,6 @@ function buildSeq(){
 }
 
 /* ---------- 3D-лист (WebGL) ---------- */
-var imgR=new Image(), imgL=new Image(); imgR.src='assets/pageR.webp'; imgL.src='assets/pageL.webp';
 var GLX=(function(){
   var CW=BW+2*MX, CH=BH+2*MY, PR=2;
   glc.width=CW*PR; glc.height=CH*PR;
@@ -354,9 +374,7 @@ var GLX=(function(){
     'if(uSh>0.0){gl_FragColor=vec4(0.0,0.0,0.0,t.a*uSh);return;}'+
     'float d=max(dot(n,normalize(vec3(-0.35,-0.45,0.82))),0.0);'+
     'float s=(0.5+0.62*d)/(0.5+0.62*0.82);'+
-    'float g=0.84+0.16*smoothstep(0.0,0.10,vUV.x);'+
-    'float e=0.92+0.08*smoothstep(0.0,0.5,1.0-abs(n.z));'+
-    'gl_FragColor=vec4(t.rgb*s*g,t.a);}';
+    'gl_FragColor=vec4(t.rgb*s,t.a);}';
   var pr=gl.createProgram(); gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs)); gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(pr);
   if(!gl.getProgramParameter(pr,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(pr)); return null}
   gl.useProgram(pr);
@@ -426,18 +444,11 @@ var GLX=(function(){
   function clear(){gl.viewport(0,0,glc.width,glc.height); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT)}
   return {draw:draw,clear:clear,setTex:function(f,b){upload(0,tF,f); upload(1,tB,b)}};
 })();
-/* текстура листа: форма страницы из картинки книги + чернила текста */
-function leafTex(pg,side,num){
-  var T=2, c=document.createElement('canvas'); c.width=Math.round(LW*T); c.height=Math.round(LHT*T); var g=c.getContext('2d');
-  g.drawImage(side==='R'?imgR:imgL,0,0,c.width,c.height);
-  if(pg){var ox=side==='R'?X0R-LX0:X0L-(LX0-LW); g.drawImage(inkCanvas(pg,side,num),ox*T,(Y0-LY0)*T,PW*T,PH*T)}
-  return c;
-}
 var PREP={idx:-1,f:null,b:null,cur:-1};
 function prep(cur){
   var idx=(cur+1)%spreadsCount();
   if(!GLX||PREP.cur===cur&&PREP.idx===idx) return;
-  PREP={cur:cur,idx:idx,f:leafTex(S.pages[2*cur+1],'R',2*cur+2),b:leafTex(S.pages[2*idx],'L',2*idx+1)};
+  PREP={cur:cur,idx:idx,f:pageTex(S.pages[2*cur+1],'R',2*cur+2),b:pageTex(S.pages[2*idx],'L',2*idx+1)};
 }
 
 /* ---------- характер листания ---------- */
@@ -489,8 +500,7 @@ function flipTo(idx,force){
   if(S.flipping) return;
   S.flipping=true; if(LENS) lens.style.opacity=0; S.act=null; markActive();
   var cur=S.spread, P=mkParams(force), H=HANDS[P.pose], ez=EASE[P.ease];
-  var nLtext=pageHTML(S.pages[2*idx],'L',2*idx+1), nRtext=pageHTML(S.pages[2*idx+1],'R',2*idx+2);
-  if(GLX){
+    if(GLX){
     if(PREP.cur!==cur||PREP.idx!==idx){PREP.cur=-1; prep(cur)}
     GLX.setTex(PREP.f,PREP.b);
   }
@@ -502,16 +512,16 @@ function flipTo(idx,force){
     var t=now-t0, pt;
     if(t<TIN){
       var u=EASE.snap(t/TIN); pt=away(p0,520); pt={x:lerp(pt.x,p0.x,u),y:lerp(pt.y,p0.y,u)};
-      if(!started&&t>TIN-120){started=true; if(GLX) GLX.draw(phiAt(P,0,0),true); pR.innerHTML=nRtext}
+      if(!started&&t>TIN-120){started=true; if(GLX) GLX.draw(phiAt(P,0,0),true); fillPage(pR,S.pages[2*idx+1],'R',2*idx+2)}
     } else if(t<TIN+D){
       var tm=(t-TIN)/1000, e=ez((t-TIN)/D);
       if(GLX) GLX.draw(phiAt(P,e,tm),true);
-      if(!started){started=true; pR.innerHTML=nRtext}
+      if(!started){started=true; fillPage(pR,S.pages[2*idx+1],'R',2*idx+2)}
       pt=track(P,e,tm,H.s,H.v);
     } else {
       if(!landed){
         landed=true; if(GLX) GLX.clear();
-        pL.innerHTML=nLtext; S.spread=idx; buildSeq(); refreshLens();
+        fillPage(pL,S.pages[2*idx],'L',2*idx+1); S.spread=idx; buildSeq(); refreshLens();
       }
       var u2=Math.min(1,(t-TIN-D)/TOUT); u2=u2*u2; var f=away(p1,520); pt={x:lerp(p1.x,f.x,u2),y:lerp(p1.y,f.y,u2)};
     }
@@ -612,7 +622,8 @@ if(q.get('demo')!=='0'){
   addGift('Витя','Роза ×3');
 }
 
-Promise.race([document.fonts.load('15px Lora'),new Promise(function(r){setTimeout(r,2500)})]).then(function(){
+var libReady=Promise.all(LIBSRC.map(function(u){return new Promise(function(res){var im=new Image(); im.onload=function(){res(im)}; im.onerror=function(){res(null)}; im.src=u})})).then(function(a){LIB=a.filter(Boolean)});
+Promise.all([libReady,Promise.race([document.fonts.load('15px Lora'),new Promise(function(r){setTimeout(r,2500)})])]).then(function(){
   setStory(STORY); requestAnimationFrame(function(t){last=t; tick(t)});
 });
 })();
