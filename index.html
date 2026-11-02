@@ -203,6 +203,7 @@ function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 function lerp(a,b,t){return a+(b-a)*t}
 
 /* ---------- руки ---------- */
+var OLDH=!(q.get('newhands')==='1'||q.get('vid')==='1');   /* по умолчанию — прежняя рука и прежнее слипание; новые — ?newhands=1 */
 var HANDS={
  lens:{img:'assets/hand_lens.webp',W:520,H:1075,sc:.15,xl:3,xr:505,sk:0,taper:1,
    stops:['#3f1d2d','#783f41','#4d2129','#5d2d34','#8b4c51','#673238','#461f27','#462227','#462a40']},
@@ -211,7 +212,7 @@ var HANDS={
  two:{img:'assets/hand_two2.webp',W:560,H:998,px:185,py:15,ba:86,sc:.41,noext:1,s:.97,v:.45,cb:.1,vr:[.35,.75]},
  vidR:{live:1,vid:1,W:352,H:962,px:191,py:213,ba:87,sc:+(new URLSearchParams(location.search).get('vsc')||.62),noext:1,s:.97,v:.9,cb:0,vr:[.5,.9],
    fin:[125,126,127,128,129,130,131,132,133,140], fout:[140,86,87,88,89,90,91,92,93,94,95,96,97,98,99]},
- pinchL:{live:1,W:560,H:1360,px:389,py:189,pv:[330.5,321.3],ba:101.1,sc:.375,noext:1,mirror:1,s:.9,v:.92,cb:0,vr:[.8,.9]},
+ pinchL:{live:1,W:560,H:1360,px:389,py:189,pv:[330.5,321.3],ba:101.1,sc:.375,noext:1,mirror:1,s:OLDH?.97:.9,v:OLDH?.6:.92,cb:0,vr:OLDH?[.6,.6]:[.8,.9]},
  quillw:{img:'assets/hq.webp',W:538,H:1318,px:8,py:396,ba:79,sc:.27,noext:1},
  quill:{img:'assets/hand_quill2.webp',W:560,H:1166,px:100,py:178,ba:72,sc:.4,noext:1}
 };
@@ -224,10 +225,12 @@ function liveImg(h,src){var im=document.createElement('img'); im.src=src; im.alt
 function buildLive(h,box){
   /* вся рука кроме большого пальца живёт в слое, который в момент хвата уходит ПОД летящий лист (указательный под страницей),
      большой палец — отдельный слой над листом */
+  if(!OLDH||h.vid){
   var lfx=document.createElement('div'); lfx.className='handu low'; var lw=document.createElement('div'); lw.className='hand'; lfx.appendChild(lw);
   var lin=document.createElement('div'); lin.className='hin'; lin.style.left=(-h.px*h.sc)+'px'; lin.style.top=(-h.py*h.sc)+'px'; lin.style.transform='scale('+h.sc+')';
   lin.style.width=h.W+'px'; lin.style.height=h.H+'px'; lw.appendChild(lin); bookwrap.insertBefore(lfx,glc); h.lfx=lfx; h.lel=lw;
   box=lin;
+  }
   if(h.vid){   /* рука из видео: набор кадров, поза o выбирает кадр (между кадрами — плавный переход) */
     h.vf={}; h.vcur=-1; h.open=-1;
     h.fin.concat(h.fout).forEach(function(n){ if(h.vf[n]) return;
@@ -245,6 +248,7 @@ function buildLive(h,box){
   var th=document.createElement('div'); th.style.cssText='position:absolute;left:0;top:0;width:'+h.W+'px;height:'+h.H+'px;transform-origin:'+h.pv[0]+'px '+h.pv[1]+'px';
   th.appendChild(liveImg(h,'assets/hr_thumb.webp')); uin.appendChild(th);
   uw.appendChild(uin); bookwrap.appendChild(ufx); h.ufx=ufx; h.uel=uw; h.thumb=th; h.open=-1; poseSet(h,1);
+  if(OLDH){box.style.width=h.W+'px'; box.style.height=h.H+'px'}
 }
 /* o: 0 — щипок сжат, 1 — большой палец отведён */
 function poseSet(h,o){
@@ -1091,12 +1095,12 @@ function flipTo(idx,force){
   var canStuck=idx===cur+1&&cur+2<n, stuck=canStuck&&(!!S.armStuck||(!force&&Math.random()<(+(q.get('stuck')||.08))));
   if(stuck&&S.armStuck){S.armStuck=false; syncStuck()}
   if(!stuck){
-    flipSheet({dir:1,pose:force||(Math.random()<.25?'pinchL':(q.get('vid')==='1'?'vidR':'pinch')),F:texOf(2*cur+1,'R'),B:texOf(2*idx,'L'),
+    flipSheet({dir:1,pose:force||(OLDH?'pinch':(Math.random()<.25?'pinchL':(q.get('vid')==='1'?'vidR':'pinch'))),F:texOf(2*cur+1,'R'),B:texOf(2*idx,'L'),
       onStart:function(){fillPage(pR,S.pages[2*idx+1],'R',2*idx+2)},
       onLand:function(){fillPage(pL,S.pages[2*idx],'L',2*idx+1); fillPage(pR,S.pages[2*idx+1],'R',2*idx+2); S.spread=idx; setStack(idx,true); buildSeq(); refreshLens()}},finish);
     return;
   }
-  flipStuck(cur,finish);
+  (OLDH?flipStuckOld:flipStuck)(cur,finish);
 }
 /* задний лист сдвигаем чуть «под» передний по общей нормали, чтобы не мерцали */
 function offsetBehind(pp,d){
@@ -1198,6 +1202,91 @@ function flipStuck(cur,cb){
     if(ptR&&!offR) placeHand(HR,ptR,scR,rotR,liftR);
     if(ptL&&!offL) placeHand(HL,ptL,scL,0,liftL);
     if(A.landed&&B.landed&&offR&&offL){ if(RUSTLE) RUSTLE.set(0); S.spread=idx; setStack(idx,true); buildSeq(); refreshLens(); cb&&cb(); return }
+    requestAnimationFrame(frame);
+  })(t0);
+}
+/* слипшиеся страницы: правая рука поднимает сразу два листа (кромка заметно толще), останавливается, пальцы трут край;
+   левая рука подходит, перехватывает верхний лист и доводит его налево, а правая укладывает задний обратно — руки не скрещиваются */
+function flipStuckOld(cur,cb){
+  var idx=cur+1, HR=HANDS.pinch, HL=HANDS.pinchL;
+  var fA=leafVar(texOf(2*cur+1,'R'),'R'), bPair=leafVar(texOf(2*cur+4,'L'),'L');
+  if(GLX) GLX.setTex(fA,bPair);
+  PAPER.reset(); PAPER2.reset();
+  var P=sheetParams(), P2=sheetParams(); P.thMax=P2.thMax=rnd(166,174)*Math.PI/180; P.kbx=P2.kbx=1; P.kd=P2.kd=Math.max(P.kd,2.4); P.damp=P2.damp=2.2;
+  var eH=rnd(74,86)*Math.PI/180/P.thMax;
+  var GR=makeGrab(HR,{s:rnd(.94,1),v:rnd(.72,.92)},fA),          /* правая: держит пару, потом задний лист */
+      GL=makeGrab(HL,{s:rnd(.9,.98),v:rnd(.5,.7)},fA);            /* левая: верхний лист */
+  var TIN=rnd(850,1050), D1=rnd(1000,1300), HOLD=rnd(1100,1400), TIN2=rnd(700,850), D2=rnd(1400,1800), D2B=rnd(1200,1600), TOUT=850;
+  var tS=TIN+D1+HOLD, t0=performance.now(), last=t0, acc=0, started=false, split=false, lStart=null;
+  var A={pp:PAPER,rel:0,relPt:null,blend:0,landed:false,toLeft:true},
+      B={pp:PAPER2,rel:0,relPt:null,blend:0,landed:false,toLeft:false};
+  var offR=false, offL=false, pR0=proj(1,GR.R0,GR.Y0,0), side=Math.random()<.5?-1:1, prevA=null, prevB=null, sm=0, relR=0, relRPt=null, relL=0, relLPt=null;
+  if(RUSTLE) RUSTLE.begin();
+  showHand(HR,true);
+  function arc(a,b,u,amp){var dx=b.x-a.x, dy=b.y-a.y, l=Math.hypot(dx,dy)||1, ww=Math.sin(Math.PI*u)*amp;
+    return {x:lerp(a.x,b.x,u)-dy/l*ww, y:lerp(a.y,b.y,u)+dx/l*ww}}
+  function nodePt(pp,n){return proj(1,pp.p[n*3],pp.p[n*3+1],pp.p[n*3+2])}
+  function edgeSpeed(pp,prev,dt){var x=0,y=0,z=0,c=0; for(var jj=0;jj<=pp.NR;jj+=3){var o=pp.id(pp.NC,jj)*3; x+=pp.p[o]; y+=pp.p[o+1]; z+=pp.p[o+2]; c++}
+    x/=c; y/=c; z/=c; var v=prev&&dt>0?Math.hypot(x-prev[0],y-prev[1],z-prev[2])/dt:0; return [v,[x,y,z]]}
+  function settle(S0,now){
+    if(S0.rel&&!S0.blend&&((now-S0.rel>450&&S0.pp.maxZ()<1.6)||now-S0.rel>1900)) S0.blend=now;
+    if(S0.blend&&!S0.landed){ var bt=Math.min(1,(now-S0.blend)/260), k=bt*bt*.5+.08;
+      if(S0.toLeft) S0.pp.blendToLeft(k); else S0.pp.blendToRight(k);
+      if(bt>=1){S0.landed=true; S0.landT=now; S0.onLand(); if(RUSTLE) RUSTLE.flap()} }
+  }
+  A.onLand=function(){fillPage(pL,S.pages[2*idx],'L',2*idx+1)};
+  B.onLand=function(){fillPage(pR,S.pages[2*idx+1],'R',2*idx+2)};
+  (function frame(now){
+    var t=now-t0, dtr=Math.min(.05,(now-last)/1000); last=now;
+    if(!started&&t>TIN-120){started=true; fillPage(pR,S.pages[2*cur+5],'R',2*cur+6); if(GLX) GLX.drawSims([{sp:PAPER.p,dir:1,set:0,thick:THICK*2.4}])}
+    var ptR=null, scR=1, rotR=0, liftR=0, ptL=null, scL=1, liftL=0;
+    if(t<TIN){ var u=EASE.snap(t/TIN); ptR=arc(away(pR0,560),pR0,u,side*36); scR=1+.07*(1-u); rotR=side*9*(1-u); liftR=14*(1-u)*(1-u); poseSet(HR,handPhase('in',t/TIN)) }
+    else {
+      /* правая рука: тянет пару до вертикали, держит и трёт край, после разделения укладывает задний лист обратно */
+      var eR, grabR=true;
+      if(t<TIN+D1) eR=eH*EASE.sine((t-TIN)/D1);
+      else if(t<tS) eR=eH+.004*Math.sin(t*.022);
+      else { var ub=(t-tS)/D2B; grabR=ub<1; eR=eH*(1-EASE.sine(Math.min(1,ub))) }
+      if(!split&&t>=tS){ split=true; PAPER2.copyFrom(PAPER); offsetBehind(PAPER2,THICK*1.3);
+        lStart=GL.pins.map(function(pn){var o=pn.n*3; return [PAPER.p[o],PAPER.p[o+1],PAPER.p[o+2]]});
+        if(GLX){ GLX.setTex(fA,leafVar(texOf(2*cur+2,'L'),'L')); GLX.setTex2(leafVar(texOf(2*cur+3,'R'),'R'),bPair) }
+        if(RUSTLE) RUSTLE.touch(.8) }
+      var holder=split?PAPER2:PAPER;                                    /* чей лист держит правая рука */
+      if(grabR) setGrab(GR,eR,P); else if(!relR){relR=now; relRPt=nodePt(PAPER2,GR.main); B.rel=now; if(RUSTLE) RUSTLE.touch(.5)}
+      if(grabR){ ptR=nodePt(holder,GR.main); scR=ptR.k; liftR=(ptR.k-1)*110+1.5; rotR=t<tS&&t>TIN+D1?Math.sin(t*.022)*.8:0;
+        poseSet(HR,t<tS?handPhase('pull',(t-TIN)/D1):handPhase('pull',1-Math.min(1,(t-tS)/D2B)*.8)) }
+      else if(!offR){ var u3=Math.min(1,(now-relR)/TOUT), e3=EASE.slow(u3); ptR=arc(relRPt,away(relRPt,620),e3,-side*30); scR=relRPt.k+.06*e3; liftR=(relRPt.k-1)*110+12*e3; poseSet(HR,handPhase('out',u3));
+        if(u3>=1){offR=true; showHand(HR,false)} }
+      /* левая рука: подходит во время паузы, перехватывает верхний лист и доводит налево */
+      var grabL=false;
+      if(!split&&t>=tS-TIN2){ showHand(HL,true); var tg=nodePt(PAPER,GL.main), ua=EASE.snap((t-(tS-TIN2))/TIN2);
+        ptL=arc(away(tg,560,HL),tg,ua,-side*30); scL=tg.k+.07*(1-ua); liftL=14*(1-ua)*(1-ua)+(tg.k-1)*110; poseSet(HL,handPhase('in',(t-(tS-TIN2))/TIN2)) }
+      if(split){
+        var ul=(t-tS)/D2; grabL=ul<1;
+        if(grabL){ setGrab(GL,eH+(1-eH)*EASE.sine(Math.min(1,ul)),P2);
+          var kb=Math.min(1,(t-tS)/260);                                     /* мягкий перехват, без рывка */
+          GL.pins.forEach(function(pn,ii){var s0=lStart[ii]; pn.x=lerp(s0[0],pn.x,kb); pn.y=lerp(s0[1],pn.y,kb); pn.z=lerp(s0[2],pn.z,kb)});
+          ptL=nodePt(PAPER,GL.main); scL=ptL.k; liftL=(ptL.k-1)*110+1.5; poseSet(HL,handPhase('pull',ul)) }
+        else if(!relL){relL=now; relLPt=nodePt(PAPER,GL.main); A.rel=now; if(RUSTLE) RUSTLE.touch(.6)}
+        if(!grabL&&relL&&!offL){ var u4=Math.min(1,(now-relL)/TOUT), e4=EASE.slow(u4); ptL=arc(relLPt,away(relLPt,620,HL),e4,side*30); scL=relLPt.k+.06*e4; liftL=(relLPt.k-1)*110+12*e4; poseSet(HL,handPhase('out',u4));
+          if(u4>=1){offL=true; showHand(HL,false)} }
+      }
+      /* физика: до разделения правая рука ведёт пару (лист A), после — A ведёт левая, B правая */
+      acc+=dtr; var n=0;
+      while(acc>=1/120&&n<4){
+        if(!A.blend) PAPER.step(1/120,P,split?(grabL?GL.pins:null):GR.pins);
+        if(split&&!B.blend) PAPER2.step(1/120,P2,grabR?GR.pins:null);
+        acc-=1/120; n++ }
+      settle(A,now); if(split) settle(B,now);
+      if(GLX){ var L=[]; if(!A.landed||now-A.landT<FADE) L.push({sp:PAPER.p,dir:1,set:0,thick:split?THICK:THICK*2.4,a:A.landed?1-(now-A.landT)/FADE:1}); if(split&&(!B.landed||now-B.landT<FADE)) L.push({sp:PAPER2.p,dir:1,set:1,thick:THICK,a:B.landed?1-(now-B.landT)/FADE:1});
+        if(L.length) GLX.drawSims(L); else GLX.clear() }
+      if(RUSTLE){ var ra=edgeSpeed(PAPER,prevA,dtr); prevA=ra[1]; var v=ra[0];
+        if(split){var rb=edgeSpeed(PAPER2,prevB,dtr); prevB=rb[1]; v=Math.max(v,rb[0])}
+        sm+=(v-sm)*.35; RUSTLE.set(A.landed&&B.landed?0:Math.max(t<tS?2.2:1.2,sm/55)) }
+    }
+    if(ptR&&!offR) placeHand(HR,ptR,scR,rotR,liftR);
+    if(ptL&&!offL) placeHand(HL,ptL,scL,0,liftL);
+    if(A.landed&&B.landed&&offR&&offL&&now-Math.max(A.landT||0,B.landT||0)>FADE){ if(RUSTLE) RUSTLE.set(0); S.spread=idx; setStack(idx,true); buildSeq(); refreshLens(); cb&&cb(); return }
     requestAnimationFrame(frame);
   })(t0);
 }
