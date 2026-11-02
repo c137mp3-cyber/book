@@ -70,6 +70,15 @@ body.haslens .lens{display:block}
 .handfx{position:absolute;left:0;top:0;width:0;height:0;z-index:19;pointer-events:none;display:none}
 .handu{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;display:none}
 .hand{position:absolute;left:0;top:0;width:0;height:0}
+#fsb{position:fixed;top:10px;right:10px;z-index:200;width:42px;height:42px;border-radius:10px;border:1px solid #8d6420;
+  background:rgba(30,18,8,.65);color:#f1deb0;font:20px/1 Lora,Georgia,serif;display:flex;align-items:center;justify-content:center;transition:opacity .6s}
+#fsb.idle{opacity:0}
+body.fs #fsb{display:none}
+
+#ctl{position:fixed;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:100}
+#ctl button{font:14px Lora,Georgia,serif;color:#f1deb0;background:rgba(30,18,8,.75);border:1px solid #8d6420;border-radius:8px;padding:8px 14px}
+#ctl button.on{background:#8d6420;color:#fff3d0;box-shadow:0 0 10px rgba(255,190,90,.6)}
+body.clean #ctl{display:none}
 </style>
 </head>
 <body>
